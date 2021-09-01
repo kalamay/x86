@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
+	"os"
 
 	. "github.com/kalamay/x86/asm/amd64"
 	. "github.com/kalamay/x86/asm/amd64/inst"
+	"github.com/kalamay/x86/emit"
 )
 
 func main() {
@@ -25,11 +27,12 @@ func main() {
 		fmt.Printf("match: %s\n", inst.Types)
 	}
 
-	enc := [15]byte{}
-	n, err := MOV.Encode(enc[:], ops[:2])
-	if err != nil {
+	e := emit.New(hex.NewEncoder(os.Stdout))
+	e.MOV(RBX, Int(-123))
+	e.MOV(EAX, Int(123))
+
+	for _, err := range e.Errors {
 		fmt.Printf("Error: %v\n", err)
-	} else {
-		fmt.Printf("%s\n", hex.EncodeToString(enc[:n]))
 	}
+	fmt.Printf("\n")
 }

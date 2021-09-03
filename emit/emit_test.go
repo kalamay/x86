@@ -14,10 +14,13 @@ import (
 
 func TestEmitInst(t *testing.T) {
 	var (
-		m8       = MakeMem(RBX).WithSize(S8)
-		m64      = MakeMem(RBX).WithSize(S64)
-		m64i64   = m64.WithIndex(RCX, S64)
-		m64i64d4 = m64i64.WithDisplacement(4)
+		m8        = MakeMem(RBX).WithSize(S8)
+		m64       = MakeMem(RBX).WithSize(S64)
+		m64i64    = m64.WithIndex(RCX, S64)
+		m64i64d4  = m64i64.WithDisplacement(4)
+		me64      = MakeMem(R11).WithSize(S64)
+		me64i64   = m64.WithIndex(R12, S64)
+		me64i64d4 = m64i64.WithDisplacement(4)
 	)
 
 	var tests = []struct {
@@ -25,6 +28,7 @@ func TestEmitInst(t *testing.T) {
 		ops  []Op
 	}{
 		{MOV, []Op{RBX, Int(-123)}},
+		{MOV, []Op{R12, Int(-123)}},
 		{MOV, []Op{RSI, Int(-123)}},
 		{MOV, []Op{EBX, Int(123)}},
 		{MOV, []Op{ESI, Int(123)}},
@@ -39,6 +43,9 @@ func TestEmitInst(t *testing.T) {
 		{MOV, []Op{m64, Int(123)}},
 		{MOV, []Op{m64i64, Int(123)}},
 		{MOV, []Op{m64i64d4, Int(123)}},
+		{MOV, []Op{me64, Uint(123456789)}},
+		{MOV, []Op{me64i64, Int(123456789)}},
+		{MOV, []Op{me64i64d4, Int(123456789)}},
 	}
 
 	for i, test := range tests {

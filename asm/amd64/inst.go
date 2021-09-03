@@ -84,13 +84,28 @@ func (in *Inst) Encode(b []byte, ops []Op) int {
 			if t.IsOpcode() {
 				n := code.Len() - 1
 				code.Set(n, code.At(n)|v.Index())
+				if v.IsExtended() {
+					ex |= RexB
+				}
 			} else if t.Kind() == KindReg {
 				addr.SetReg(v)
+				if v.IsExtended() {
+					ex |= RexR
+				}
 			} else {
 				addr.SetDirect(v)
+				if v.IsExtended() {
+					ex |= RexB
+				}
 			}
 		case Mem:
 			addr.SetIndirect(v)
+			if v.index.IsExtended() {
+				ex |= RexX
+			}
+			if v.base.IsExtended() {
+				ex |= RexB
+			}
 			disp = v.disp
 		}
 

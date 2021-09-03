@@ -23,7 +23,9 @@ func (r Reg) Index() uint8 {
 }
 
 func (r Reg) IsExtended() bool {
-	return r.ID() > 7
+	// TODO: handle ZMM16+
+	id := r.ID()
+	return 7 < id && id < 16
 }
 
 func (r Reg) IsHighByte() bool {

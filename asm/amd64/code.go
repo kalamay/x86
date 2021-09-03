@@ -89,9 +89,9 @@ const (
 	Vex3 Ex = 0b00000000_11100000_11000100 | C3
 
 	RexW = 0b00001000 | Rex
-	RexR = 0b00000100 | Rex
-	RexX = 0b00000010 | Rex
-	RexB = 0b00000001 | Rex
+	RexR = 0b00000100 | Rex // Extension of the ModR/M reg field
+	RexX = 0b00000010 | Rex // Extension of the SIB index field
+	RexB = 0b00000001 | Rex // Extension of the ModR/M r/m field, SIB base field, or Opcode reg field
 
 	Vex3_0F   = 0b00000000_00000001_00000000 | Vex3
 	Vex3_0F38 = 0b00000000_00000010_00000000 | Vex3

@@ -14,6 +14,7 @@ import (
 
 func TestEmitInst(t *testing.T) {
 	var (
+		m8       = MakeMem(RBX).WithSize(S8)
 		m64      = MakeMem(RBX).WithSize(S64)
 		m64i64   = m64.WithIndex(RCX, S64)
 		m64i64d4 = m64i64.WithDisplacement(4)
@@ -24,9 +25,14 @@ func TestEmitInst(t *testing.T) {
 		ops  []Op
 	}{
 		{MOV, []Op{RBX, Int(-123)}},
-		{MOV, []Op{EAX, Int(123)}},
-		{MOV, []Op{AX, Int(123)}},
-		{MOV, []Op{AL, Int(123)}},
+		{MOV, []Op{EBX, Int(123)}},
+		{MOV, []Op{BX, Int(123)}},
+		{MOV, []Op{BL, Int(123)}},
+		{MOV, []Op{BH, Int(123)}},
+		{MOV, []Op{SIL, Int(123)}},
+		{MOV, []Op{m8, BL}},
+		{MOV, []Op{m8, BH}},
+		{MOV, []Op{m8, SIL}},
 		{MOV, []Op{m64, Int(123)}},
 		{MOV, []Op{m64i64, Int(123)}},
 		{MOV, []Op{m64i64d4, Int(123)}},

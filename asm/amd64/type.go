@@ -152,47 +152,53 @@ const (
 )
 
 const (
-	M8_R8   = (TypeSet(TM8) << T1) | (TypeSet(TR8) << T2)   // r/m8 ← r8
-	M16_R16 = (TypeSet(TM16) << T1) | (TypeSet(TR16) << T2) // r/m16 ← r16
-	M32_R32 = (TypeSet(TM32) << T1) | (TypeSet(TR32) << T2) // r/m32 ← r32
-	M64_R64 = (TypeSet(TM64) << T1) | (TypeSet(TR64) << T2) // r/m64 ← r64
+	M8_R8   = (TypeSet(TM8) << T1) | (TypeSet(TR8) << T2)     // r/m8 ← r8
+	M8_R8h  = (TypeSet(TM8) << T1) | (TypeSet(TR8|THR) << T2) // r/m8 ← r8
+	M16_R16 = (TypeSet(TM16) << T1) | (TypeSet(TR16) << T2)   // r/m16 ← r16
+	M32_R32 = (TypeSet(TM32) << T1) | (TypeSet(TR32) << T2)   // r/m32 ← r32
+	M64_R64 = (TypeSet(TM64) << T1) | (TypeSet(TR64) << T2)   // r/m64 ← r64
 
-	R8_M8    = (TypeSet(TR8) << T1) | (TypeSet(TM8) << T2)       // r8 ← r/m8
-	R16_M16  = (TypeSet(TR16) << T1) | (TypeSet(TM16) << T2)     // r16 ← r/m16
-	R16_M16s = (TypeSet(TR16) << T1) | (TypeSet(TM16|TSX) << T2) // r16 ← r/m16 (sign extended)
-	R32_M32  = (TypeSet(TR32) << T1) | (TypeSet(TM32) << T2)     // r32 ← r/m32
-	R32_M32s = (TypeSet(TR32) << T1) | (TypeSet(TM32|TSX) << T2) // r32 ← r/m32 (sign extended)
-	R64_M64  = (TypeSet(TR64) << T1) | (TypeSet(TM64) << T2)     // r64 ← r/m64
-	R16_M8   = (TypeSet(TR16) << T1) | (TypeSet(TM8) << T2)      // r16 ← r/m8
-	R16_M8s  = (TypeSet(TR16) << T1) | (TypeSet(TM8|TSX) << T2)  // r16 ← r/m8 (sign extended)
-	R32_M8   = (TypeSet(TR32) << T1) | (TypeSet(TM8) << T2)      // r32 ← r/m8
-	R32_M8s  = (TypeSet(TR32) << T1) | (TypeSet(TM8|TSX) << T2)  // r32 ← r/m8 (sign extended)
-	R32_M16  = (TypeSet(TR32) << T1) | (TypeSet(TM16) << T2)     // r32 ← r/m16
-	R32_M16s = (TypeSet(TR32) << T1) | (TypeSet(TM16|TSX) << T2) // r32 ← r/m16 (sign extended)
-	R64_M8   = (TypeSet(TR64) << T1) | (TypeSet(TM8) << T2)      // r64 ← r/m8
-	R64_M8s  = (TypeSet(TR64) << T1) | (TypeSet(TM8|TSX) << T2)  // r64 ← r/m8 (sign extended)
-	R64_M16  = (TypeSet(TR64) << T1) | (TypeSet(TM16) << T2)     // r64 ← r/m16
-	R64_M16s = (TypeSet(TR64) << T1) | (TypeSet(TM16|TSX) << T2) // r64 ← r/m16 (sign extended)
-	R64_M32  = (TypeSet(TR64) << T1) | (TypeSet(TM32) << T2)     // r64 ← r/m32
-	R64_M32s = (TypeSet(TR64) << T1) | (TypeSet(TM32|TSX) << T2) // r64 ← r/m32 (sign extended)
+	R8_M8    = (TypeSet(TR8) << T1) | (TypeSet(TM8) << T2)         // r8 ← r/m8
+	R8_M8h   = (TypeSet(TR8|THR) << T1) | (TypeSet(TM8|THR) << T2) // r8 ← r/m8
+	R16_M16  = (TypeSet(TR16) << T1) | (TypeSet(TM16) << T2)       // r16 ← r/m16
+	R16_M16s = (TypeSet(TR16) << T1) | (TypeSet(TM16|TSX) << T2)   // r16 ← r/m16 (sign extended)
+	R32_M32  = (TypeSet(TR32) << T1) | (TypeSet(TM32) << T2)       // r32 ← r/m32
+	R32_M32s = (TypeSet(TR32) << T1) | (TypeSet(TM32|TSX) << T2)   // r32 ← r/m32 (sign extended)
+	R64_M64  = (TypeSet(TR64) << T1) | (TypeSet(TM64) << T2)       // r64 ← r/m64
+	R16_M8   = (TypeSet(TR16) << T1) | (TypeSet(TM8) << T2)        // r16 ← r/m8
+	R16_M8s  = (TypeSet(TR16) << T1) | (TypeSet(TM8|TSX) << T2)    // r16 ← r/m8 (sign extended)
+	R32_M8   = (TypeSet(TR32) << T1) | (TypeSet(TM8) << T2)        // r32 ← r/m8
+	R32_M8s  = (TypeSet(TR32) << T1) | (TypeSet(TM8|TSX) << T2)    // r32 ← r/m8 (sign extended)
+	R32_M16  = (TypeSet(TR32) << T1) | (TypeSet(TM16) << T2)       // r32 ← r/m16
+	R32_M16s = (TypeSet(TR32) << T1) | (TypeSet(TM16|TSX) << T2)   // r32 ← r/m16 (sign extended)
+	R64_M8   = (TypeSet(TR64) << T1) | (TypeSet(TM8) << T2)        // r64 ← r/m8
+	R64_M8s  = (TypeSet(TR64) << T1) | (TypeSet(TM8|TSX) << T2)    // r64 ← r/m8 (sign extended)
+	R64_M16  = (TypeSet(TR64) << T1) | (TypeSet(TM16) << T2)       // r64 ← r/m16
+	R64_M16s = (TypeSet(TR64) << T1) | (TypeSet(TM16|TSX) << T2)   // r64 ← r/m16 (sign extended)
+	R64_M32  = (TypeSet(TR64) << T1) | (TypeSet(TM32) << T2)       // r64 ← r/m32
+	R64_M32s = (TypeSet(TR64) << T1) | (TypeSet(TM32|TSX) << T2)   // r64 ← r/m32 (sign extended)
 
-	R8_I8   = (TypeSet(TR8) << T1) | (TypeSet(TI8) << T2)   // r8 ← imm8
-	R16_I16 = (TypeSet(TR16) << T1) | (TypeSet(TI16) << T2) // r16 ← imm16
-	R32_I32 = (TypeSet(TR32) << T1) | (TypeSet(TI32) << T2) // r32 ← imm32
+	R8_I8   = (TypeSet(TR8) << T1) | (TypeSet(TI8) << T2)     // r8 ← imm8
+	R8_I8h  = (TypeSet(TR8|THR) << T1) | (TypeSet(TI8) << T2) // r8 ← imm8
+	R16_I16 = (TypeSet(TR16) << T1) | (TypeSet(TI16) << T2)   // r16 ← imm16
+	R32_I32 = (TypeSet(TR32) << T1) | (TypeSet(TI32) << T2)   // r32 ← imm32
 
-	O8_I8   = (TypeSet(TR8|TOR) << T1) | (TypeSet(TI8) << T2)   // r8 ← imm8 (opcode merged)
-	O16_I16 = (TypeSet(TR16|TOR) << T1) | (TypeSet(TI16) << T2) // r16 ← imm16 (opcode merged)
-	O32_I32 = (TypeSet(TR32|TOR) << T1) | (TypeSet(TI32) << T2) // r32 ← imm32 (opcode merged)
-	O64_I64 = (TypeSet(TR64|TOR) << T1) | (TypeSet(TI64) << T2) // r64 ← imm64 (opcode merged)
+	O8_I8   = (TypeSet(TR8|TOR) << T1) | (TypeSet(TI8) << T2)     // r8 ← imm8 (opcode merged)
+	O8_I8h  = (TypeSet(TR8|TOR|THR) << T1) | (TypeSet(TI8) << T2) // r8 ← imm8 (opcode merged)
+	O16_I16 = (TypeSet(TR16|TOR) << T1) | (TypeSet(TI16) << T2)   // r16 ← imm16 (opcode merged)
+	O32_I32 = (TypeSet(TR32|TOR) << T1) | (TypeSet(TI32) << T2)   // r32 ← imm32 (opcode merged)
+	O64_I64 = (TypeSet(TR64|TOR) << T1) | (TypeSet(TI64) << T2)   // r64 ← imm64 (opcode merged)
 
-	M8_I8    = (TypeSet(TM8) << T1) | (TypeSet(TI8) << T2)       // r/m8 ← r8
-	M8_I8s   = (TypeSet(TM8) << T1) | (TypeSet(TI8|TSX) << T2)   // r/m8 ← r8 (sign extended)
-	M16_I8s  = (TypeSet(TM16) << T1) | (TypeSet(TI8|TSX) << T2)  // r/m16 ← r8 (sign extended)
-	M16_I16  = (TypeSet(TM16) << T1) | (TypeSet(TI16) << T2)     // r/m16 ← r16
-	M32_I8s  = (TypeSet(TM32) << T1) | (TypeSet(TI8|TSX) << T2)  // r/m32 ← r8
-	M32_I32  = (TypeSet(TM32) << T1) | (TypeSet(TI32) << T2)     // r/m32 ← r32
-	M64_I8s  = (TypeSet(TM64) << T1) | (TypeSet(TI8|TSX) << T2)  // r/m64 ← r8
-	M64_I32s = (TypeSet(TM64) << T1) | (TypeSet(TI32|TSX) << T2) // r/m64 ← r32 (sign extended)
+	M8_I8    = (TypeSet(TM8) << T1) | (TypeSet(TI8) << T2)         // r/m8 ← r8
+	M8_I8h   = (TypeSet(TM8|THR) << T1) | (TypeSet(TI8) << T2)     // r/m8 ← r8
+	M8_I8s   = (TypeSet(TM8) << T1) | (TypeSet(TI8|TSX) << T2)     // r/m8 ← r8 (sign extended)
+	M8_I8hs  = (TypeSet(TM8|THR) << T1) | (TypeSet(TI8|TSX) << T2) // r/m8 ← r8 (sign extended)
+	M16_I8s  = (TypeSet(TM16) << T1) | (TypeSet(TI8|TSX) << T2)    // r/m16 ← r8 (sign extended)
+	M16_I16  = (TypeSet(TM16) << T1) | (TypeSet(TI16) << T2)       // r/m16 ← r16
+	M32_I8s  = (TypeSet(TM32) << T1) | (TypeSet(TI8|TSX) << T2)    // r/m32 ← r8
+	M32_I32  = (TypeSet(TM32) << T1) | (TypeSet(TI32) << T2)       // r/m32 ← r32
+	M64_I8s  = (TypeSet(TM64) << T1) | (TypeSet(TI8|TSX) << T2)    // r/m64 ← r8
+	M64_I32s = (TypeSet(TM64) << T1) | (TypeSet(TI32|TSX) << T2)   // r/m64 ← r32 (sign extended)
 )
 
 func T(t ...Type) (ts TypeSet) {

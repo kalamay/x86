@@ -2,6 +2,7 @@ package amd64
 
 import (
 	"fmt"
+	"math"
 	"math/bits"
 )
 
@@ -148,20 +149,60 @@ func (e Ex) ExpandDest() Ex {
 // BASE  - The base field specifies the register number of the base register.
 type Addr Code
 
-const (
-	ModDisp0 = iota << 6
-	ModDisp8
-	ModDisp32
-	ModDirect
-)
-
 func (a Addr) Len() int            { return Code(a).Len() }
 func (a Addr) Encode(b []byte) int { return Code(a).Encode(b) }
 
-func (a Addr) DispSize() Size { return S0 }
+func (a Addr) ModRM() (ModRM, bool) {
+	if Code(a).Has(0) {
+		return ModRM(Code(a).At(0)), true
+	}
+	return ModRM(0), false
+}
 
-func (a *Addr) SetDirect(r1 Reg, r2 ...Reg) {
-	(*Code)(a).Set(0, byte(ModRMDirect(r1, r2...)))
+func (a Addr) SIB() (SIB, bool) {
+	if Code(a).Has(1) {
+		return SIB(Code(a).At(1)), true
+	}
+	return SIB(0), false
+}
+
+func (a Addr) DispSize() Size {
+	if m, ok := a.ModRM(); ok {
+		return m.DispSize()
+	}
+	return S0
+}
+
+func (a *Addr) SetReg(r Reg) {
+	m, ok := a.ModRM()
+	if !ok {
+		m = ModRMDirect
+	}
+	(*Code)(a).Set(0, byte(m.WithReg(r)))
+}
+
+func (a *Addr) SetDirect(r Reg) {
+	m, _ := a.ModRM()
+	(*Code)(a).Set(0, byte(m.WithDirect(r)))
+}
+
+func (a *Addr) SetIndirect(mem Mem) {
+	m, _ := a.ModRM()
+
+	d := uint8(ModDisp0)
+	switch {
+	case mem.disp > math.MaxUint8:
+		d = ModDisp32
+	case mem.disp > 0:
+		d = ModDisp8
+	}
+
+	if mem.scale == S0 {
+		(*Code)(a).Set(0, byte(m.WithIndirectReg(d, mem.base)))
+	} else {
+		(*Code)(a).Set(0, byte(m.WithIndirectMem(d)))
+		(*Code)(a).Set(1, byte(SIBOf(mem)))
+	}
 }
 
 // ModRM defintes the addressing-form specifier byte.
@@ -186,12 +227,49 @@ func (a *Addr) SetDirect(r1 Reg, r2 ...Reg) {
 //       express opcode information for some instructions.
 type ModRM triple
 
-func ModRMDirect(r1 Reg, r2 ...Reg) ModRM {
-	m := ModRM(triple(ModDirect).set1(r1.Index()))
-	if len(r2) > 0 {
-		m = ModRM(triple(m).set2(r2[0].Index()))
+const (
+	ModDisp0 = iota
+	ModDisp8
+	ModDisp32
+	ModDirect
+
+	ModRMDirect = ModDirect << 6
+
+	rmIndirect = 0b100
+	rmDisp32   = 0b101
+)
+
+func (m ModRM) WithReg(r Reg) ModRM {
+	return ModRM(triple(m).set2(r.Index()))
+}
+
+func (m ModRM) WithDirect(r Reg) ModRM {
+	return ModRM(triple(m).set3(ModDirect).set1(r.Index()))
+}
+
+func (m ModRM) WithIndirectReg(disp uint8, r Reg) ModRM {
+	i := r.Index()
+	if i == rmIndirect || (disp == 0 && i == rmDisp32) {
+		panic("R/M field cannot hold register index")
 	}
-	return m
+	return ModRM(triple(m).set3(disp).set1(i))
+}
+
+func (m ModRM) WithIndirectMem(disp uint8) ModRM {
+	return ModRM(triple(m).set3(disp).set1(rmIndirect))
+}
+
+func (m ModRM) Mod() uint8 { return triple(m).v3() }
+func (m ModRM) Reg() uint8 { return triple(m).v2() }
+
+func (m ModRM) DispSize() Size {
+	switch m.Mod() {
+	case ModDisp8:
+		return S8
+	case ModDisp32:
+		return S32
+	}
+	return S0
 }
 
 // SIB defintes the secondary addressing-form specifier byte.
@@ -209,6 +287,10 @@ func ModRMDirect(r1 Reg, r2 ...Reg) ModRM {
 // INDEX - The index field specifies the register number of the index register.
 // BASE  - The base field specifies the register number of the base register.
 type SIB triple
+
+func SIBOf(m Mem) SIB {
+	return SIB(triple(0).set1(m.base.Index()).set2(m.index.Index()).set3(uint8(m.scale) - 1))
+}
 
 type triple byte
 

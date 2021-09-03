@@ -78,13 +78,19 @@ func (in *Inst) Encode(b []byte, ops []Op) int {
 		case Uint:
 			nimm = encodeInt(imm[:], uint64(v), t.ImmSize())
 		case Reg:
+			if v.Size() > S64 {
+				panic("TODO: vector extensions")
+			}
 			if t.IsOpcode() {
 				n := code.Len() - 1
 				code.Set(n, code.At(n)|v.Index())
+			} else if t.Kind() == KindReg {
+				addr.SetReg(v)
 			} else {
 				addr.SetDirect(v)
 			}
 		case Mem:
+			addr.SetIndirect(v)
 			disp = v.disp
 		}
 

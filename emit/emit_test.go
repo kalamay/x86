@@ -15,6 +15,9 @@ var tests = []struct {
 }{
 	{"mov1", func(e *Emit) { e.MOV(RBX, Int(-123)) }},
 	{"mov2", func(e *Emit) { e.MOV(EAX, Int(123)) }},
+	{"mov3", func(e *Emit) { e.MOV(MakeMem(RBX).WithSize(S64), Int(123)) }},
+	{"mov3", func(e *Emit) { e.MOV(MakeMem(RBX).WithSize(S64).WithIndex(RCX, S64), Int(123)) }},
+	{"mov3", func(e *Emit) { e.MOV(MakeMem(RBX).WithSize(S64).WithIndex(RCX, S64).WithDisplacement(4), Int(123)) }},
 }
 
 func TestEmit(t *testing.T) {

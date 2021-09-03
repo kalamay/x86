@@ -25,9 +25,12 @@ func TestEmitInst(t *testing.T) {
 		ops  []Op
 	}{
 		{MOV, []Op{RBX, Int(-123)}},
+		{MOV, []Op{RSI, Int(-123)}},
 		{MOV, []Op{EBX, Int(123)}},
+		{MOV, []Op{ESI, Int(123)}},
 		{MOV, []Op{BX, Int(123)}},
 		{MOV, []Op{BL, Int(123)}},
+		{MOV, []Op{SI, Int(123)}},
 		{MOV, []Op{BH, Int(123)}},
 		{MOV, []Op{SIL, Int(123)}},
 		{MOV, []Op{m8, BL}},
@@ -40,12 +43,17 @@ func TestEmitInst(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("emit-%d", i), func(t *testing.T) {
+			test := test
+			t.Parallel()
+
 			n, s := 0, [4]string{}
 			for _, op := range test.ops {
 				s[n] = op.String()
 				n++
 			}
+
 			t.Logf("%s %s", test.inst.Name, strings.Join(s[:n], ", "))
+
 			testEmit(t, func(e *Emit) {
 				e.Emit(test.inst, test.ops)
 			})

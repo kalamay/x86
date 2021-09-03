@@ -12,7 +12,13 @@ type InstSet struct {
 }
 
 func (s *InstSet) Select(ops []Op) (*Inst, error) {
-	m, sized := TypeSetMaskOf(ops)
+	m, sized := TypeSet(0), false
+	for i, op := range ops {
+		if op.Size() > S0 {
+			sized = true
+		}
+		m |= TypeSet(op.Kind()) << (i * typeBits)
+	}
 	if !sized {
 		return nil, fmt.Errorf("ambiguous operand size for %q", s.Name)
 	}

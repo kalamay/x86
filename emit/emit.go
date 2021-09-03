@@ -1,32 +1,64 @@
 package emit
 
 import (
+	"bytes"
 	"io"
 
 	. "github.com/kalamay/x86/asm/amd64"
 	. "github.com/kalamay/x86/asm/amd64/inst"
 )
 
-func New(w io.Writer) *Emitter {
-	return &Emitter{w: w}
+type Emitter interface {
+	Emit(w io.Writer, in *InstSet, ops []Op) error
 }
 
-type Emitter struct {
-	Errors []error
+type Emit struct {
+	Errors  []error
+	Emitter Emitter
 
 	w io.Writer
 }
 
-func (e *Emitter) Emit(in *InstSet, ops []Op) (n int, err error) {
-	b := [15]byte{}
-	if n, err = in.Encode(b[:], ops); err != nil {
-		n = 0
+func New(w io.Writer) *Emit {
+	return &Emit{Emitter: X86{}, w: w}
+}
+
+func (e *Emit) Emit(in *InstSet, ops []Op) (err error) {
+	if err = e.Emitter.Emit(e.w, in, ops); err != nil {
 		e.Errors = append(e.Errors, err)
-	} else if len(e.Errors) == 0 {
-		_, err = e.w.Write(b[:n])
+		e.w = io.Discard
 	}
 	return
 }
 
-func (e *Emitter) ADD(ops ...Op) (n int, err error) { return e.Emit(ADD, ops) }
-func (e *Emitter) MOV(ops ...Op) (n int, err error) { return e.Emit(MOV, ops) }
+func (e *Emit) ADD(ops ...Op) error { return e.Emit(ADD, ops) }
+func (e *Emit) MOV(ops ...Op) error { return e.Emit(MOV, ops) }
+
+type X86 struct{}
+
+func (x X86) Emit(w io.Writer, in *InstSet, ops []Op) (err error) {
+	n, b := 0, [15]byte{}
+	if n, err = in.Encode(b[:], ops); err == nil {
+		_, err = w.Write(b[:n])
+	}
+	return
+}
+
+type Assembly struct {
+	buf bytes.Buffer
+}
+
+func (a Assembly) Emit(w io.Writer, in *InstSet, ops []Op) (err error) {
+	a.buf.Reset()
+	a.buf.WriteString(in.Name)
+	for i, op := range ops {
+		if i > 0 {
+			a.buf.WriteByte(',')
+		}
+		a.buf.WriteByte(' ')
+		a.buf.WriteString(op.String())
+	}
+	a.buf.WriteByte('\n')
+	_, err = w.Write(a.buf.Bytes())
+	return
+}

@@ -14,7 +14,7 @@ func (_ Int) Kind() Kind      { return KindImm }
 func (_ Int) Size() Size      { return S0 }
 func (i Int) Validate() error { return nil }
 func (i Int) Name() string    { return immsTypes[i.MinSize()][1:] }
-func (i Int) String() string  { return fmt.Sprintf("$%d", i) }
+func (i Int) String() string  { return fmt.Sprintf("%d", i) }
 
 func (i Int) Match(t Type) bool {
 	return t.IsImm() && i.MinSize() <= t.ImmSize()
@@ -47,7 +47,7 @@ func (_ Uint) Kind() Kind      { return KindImm }
 func (_ Uint) Size() Size      { return S0 }
 func (i Uint) Validate() error { return nil }
 func (i Uint) Name() string    { return immzTypes[i.MinSize()][1:] }
-func (i Uint) String() string  { return fmt.Sprintf("$%", i) }
+func (i Uint) String() string  { return fmt.Sprintf("%d", i) }
 
 func (i Uint) Match(t Type) bool {
 	return t.IsImm() && i.MinSize() <= t.ImmSize()

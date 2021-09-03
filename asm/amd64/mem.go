@@ -2,7 +2,6 @@ package amd64
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 )
 
@@ -81,7 +80,16 @@ func (m Mem) Name() string {
 }
 
 func (m Mem) String() string {
-	n, parts := 0, [7]string{}
+	n, parts := 0, [11]string{}
+
+	if m.size > S0 {
+		parts[n] = m.Name()
+		parts[n+1] = " "
+		n += 2
+	}
+
+	parts[n] = "["
+	n += 1
 
 	if m.disp != nil {
 		parts[n] = m.disp.String()
@@ -102,8 +110,11 @@ func (m Mem) String() string {
 		n += 4
 	}
 
-	return fmt.Sprintf("%s[%s]", m.Name(), strings.Join(parts[:n], ""))
+	parts[n] = "]"
+	n += 1
+
+	return strings.Join(parts[:n], "")
 }
 
 var memScale = [...]string{"0", "1", "2", "x", "4", "x", "x", "x", "8"}
-var memNames = [...]string{"m", "m8", "m16", "m32", "m64", "m128", "m256"}
+var memNames = [...]string{"", "BYTE PTR", "WORD PTR", "DWORD PTR", "QWORD PTR", "m128", "m256"}

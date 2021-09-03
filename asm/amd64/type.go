@@ -195,16 +195,6 @@ const (
 	M64_I32s = (TypeSet(TM64) << T1) | (TypeSet(TI32|TSX) << T2) // r/m64 ← r32 (sign extended)
 )
 
-func TypeSetMaskOf(ops []Op) (mask TypeSet, sized bool) {
-	for i, op := range ops {
-		if op.Size() > S0 {
-			sized = true
-		}
-		mask |= TypeSet(op.Kind()) << (i * typeBits)
-	}
-	return
-}
-
 func T(t ...Type) (ts TypeSet) {
 	for i, t := range t {
 		ts |= TypeSet(t << i * typeBits)

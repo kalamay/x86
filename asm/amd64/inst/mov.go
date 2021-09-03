@@ -2,7 +2,7 @@ package inst
 
 import . "github.com/kalamay/x86/asm/amd64"
 
-var MOV = &InstSet{"MOV", S32, []Inst{
+var MOV = &InstSet{"mov", S32, []Inst{
 	{M8_R8, 0, 0, C(0x88)},            // Move r8 to r/m8.
 	{M16_R16, AddrOpSize, 0, C(0x89)}, // Move r16 to r/m16.
 	{M32_R32, 0, 0, C(0x89)},          // Move r32 to r/m32.

@@ -9,13 +9,18 @@ import (
 type Code uint64
 
 const (
-	C1 = 1 << (iota + 56)
+	C1 = 1 << (iota + cMaskOff)
 	C2
 	C3
 	C4
 	C5
 	C6
 	C7
+
+	cFinal   = 0x7fffffffffffffff
+	cValues  = 0x00ffffffffffffff
+	cMask    = 0xff00000000000000
+	cMaskOff = 56
 )
 
 func C(b ...byte) (c Code) {
@@ -27,21 +32,25 @@ func C(b ...byte) (c Code) {
 
 func (c Code) Len() int       { return 8 - bits.LeadingZeros8(c.At(c.Cap())) }
 func (c Code) Cap() int       { return 7 }
-func (c Code) Has(i int) bool { return (c>>(56+i))&1 == 1 }
+func (c Code) Has(i int) bool { return (c>>(cMaskOff+i))&1 == 1 }
 func (c Code) At(i int) byte  { return byte(c >> (i << 3)) }
 
 func (c *Code) Set(i int, b byte) {
 	if i >= c.Cap() {
 		panic("invalid code index")
 	}
-	*c = (*c & ^(0xff << (i * 8))) | Code(b)<<(i*8) | 1<<(56+i)
+	*c = (*c & ^(0xff << (i * 8))) | Code(b)<<(i*8) | 1<<(cMaskOff+i)
 }
 
 func (c *Code) Clear(i int) {
 	if i >= c.Cap() {
 		panic("invalid code index")
 	}
-	*c &= ^(0xff<<(i*8) | 1<<(56+i))
+	*c &= ^(0xff<<(i*8) | 1<<(cMaskOff+i))
+}
+
+func (c *Code) Insert(b byte) {
+	*c = (((*c & cMask) << 1) | (1 << cMaskOff) | ((*c << 8) & cValues) | Code(b)) & cFinal
 }
 
 func (c Code) Encode(b []byte) int {
@@ -55,7 +64,7 @@ func (c Code) Encode(b []byte) int {
 
 func (c Code) String() string {
 	n := c.Len()
-	return fmt.Sprintf("#%0*x", n*2, uint64(c)&0xffffffffffffff)
+	return fmt.Sprintf("#%0*x", n*2, uint64(c)&cValues)
 }
 
 type Prefix Code

@@ -45,22 +45,6 @@ type Inst struct {
 	Code   Code
 }
 
-func encodeInt(b []byte, v uint64, s Size) int {
-	switch s {
-	default:
-		panic("invalid type size")
-	case S8:
-		b[0] = byte(uint8(v))
-	case S16:
-		binary.LittleEndian.PutUint16(b, uint16(v))
-	case S32:
-		binary.LittleEndian.PutUint32(b, uint32(v))
-	case S64:
-		binary.LittleEndian.PutUint64(b, uint64(v))
-	}
-	return s.Bytes()
-}
-
 func (in *Inst) Encode(b []byte, ops []Op) int {
 	ex, code := in.Ex, in.Code
 	var (
@@ -74,38 +58,25 @@ func (in *Inst) Encode(b []byte, ops []Op) int {
 	for i := 0; t > 0; i++ {
 		switch v := ops[i].(type) {
 		case Int:
-			nimm = encodeInt(imm[:], uint64(v), t.ImmSize())
+			nimm = v.Encode(imm[:], t.ImmSize())
 		case Uint:
-			nimm = encodeInt(imm[:], uint64(v), t.ImmSize())
+			nimm = v.Encode(imm[:], t.ImmSize())
 		case Reg:
-			if v.Size() > S64 {
-				panic("TODO: vector extensions")
-			}
 			if t.IsOpcode() {
 				n := code.Len() - 1
 				code.Set(n, code.At(n)|v.Index())
-				if v.IsExtended() {
-					ex |= RexB
-				}
+				ex.Extend(v, ExtendOpcode)
 			} else if t.Kind() == KindReg {
 				addr.SetReg(v)
-				if v.IsExtended() {
-					ex |= RexR
-				}
+				ex.Extend(v, ExtendReg)
 			} else {
 				addr.SetDirect(v)
-				if v.IsExtended() {
-					ex |= RexB
-				}
+				ex.Extend(v, ExtendBase)
 			}
 		case Mem:
 			addr.SetIndirect(v)
-			if v.index.IsExtended() {
-				ex |= RexX
-			}
-			if v.base.IsExtended() {
-				ex |= RexB
-			}
+			ex.Extend(v.index, ExtendIndex)
+			ex.Extend(v.base, ExtendBase)
 			disp = v.disp
 		}
 

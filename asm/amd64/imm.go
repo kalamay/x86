@@ -1,6 +1,7 @@
 package amd64
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math"
 )
@@ -43,6 +44,10 @@ func (i Int) MinSize() Size {
 	return S64
 }
 
+func (i Int) Encode(b []byte, s Size) int {
+	return encodeInt(b, uint64(i), s)
+}
+
 func (_ Uint) Kind() Kind      { return KindImm }
 func (_ Uint) Size() Size      { return S0 }
 func (i Uint) Validate() error { return nil }
@@ -74,4 +79,24 @@ func (i Uint) MinSize() Size {
 		return S32
 	}
 	return S64
+}
+
+func (i Uint) Encode(b []byte, s Size) int {
+	return encodeInt(b, uint64(i), s)
+}
+
+func encodeInt(b []byte, v uint64, s Size) int {
+	switch s {
+	default:
+		panic("invalid type size")
+	case S8:
+		b[0] = byte(uint8(v))
+	case S16:
+		binary.LittleEndian.PutUint16(b, uint16(v))
+	case S32:
+		binary.LittleEndian.PutUint32(b, uint32(v))
+	case S64:
+		binary.LittleEndian.PutUint64(b, uint64(v))
+	}
+	return s.Bytes()
 }

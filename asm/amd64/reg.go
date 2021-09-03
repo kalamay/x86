@@ -22,14 +22,8 @@ func (r Reg) Index() uint8 {
 	return uint8((r >> SizeBits) & 0b111)
 }
 
-func (r Reg) IsExtended() bool {
-	// TODO: handle ZMM16+
-	id := r.ID()
-	return 7 < id && id < 16
-}
-
-func (r Reg) IsHighByte() bool {
-	return r.Size() == S8 && r.ID() > 15
+func (r Reg) Group() uint8 {
+	return uint8(r >> (SizeBits + 3))
 }
 
 func (r Reg) Match(t Type) bool {
@@ -39,7 +33,7 @@ func (r Reg) Match(t Type) bool {
 	}
 	s, rs := t.RegSize(), r.Size()
 	if s > S0 {
-		return t.IsHighByte() == r.IsHighByte() && s == rs
+		return s == rs
 	}
 	return rs > S0 && S16 <= rs && rs <= S64
 }
@@ -182,8 +176,43 @@ const (
 	YMM15
 )
 
+const (
+	ZMM0 = Reg(iota<<SizeBits | S512)
+	ZMM1
+	ZMM2
+	ZMM3
+	ZMM4
+	ZMM5
+	ZMM6
+	ZMM7
+	ZMM8
+	ZMM9
+	ZMM10
+	ZMM11
+	ZMM12
+	ZMM13
+	ZMM14
+	ZMM15
+	ZMM16
+	ZMM17
+	ZMM18
+	ZMM19
+	ZMM20
+	ZMM21
+	ZMM22
+	ZMM23
+	ZMM24
+	ZMM25
+	ZMM26
+	ZMM27
+	ZMM28
+	ZMM29
+	ZMM30
+	ZMM31
+)
+
 var regNames = [...][]string{
-	{"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh", "r8l", "r9l", "r10l", "r11l", "r12l", "r13l", "r14l", "r15l", "", "", "", "", "spl", "bpl", "sil", "dil"},
+	{"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh", "r8l", "r9l", "r10l", "r11l", "r12l", "r13l", "r14l", "r15l", "%!", "%!", "%!", "%!", "spl", "bpl", "sil", "dil"},
 	{"ax", "cx", "dx", "bx", "sp", "bp", "si", "di", "r8w", "r9w", "r10w", "r11w", "r12w", "r13w", "r14w", "r15w"},
 	{"eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"},
 	{"rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"},

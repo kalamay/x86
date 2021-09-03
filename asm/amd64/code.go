@@ -119,16 +119,34 @@ func (e Ex) IsRex() bool  { return (e & 0xff) == Rex }
 func (e Ex) IsVex2() bool { return (e & 0xff) == Vex2 }
 func (e Ex) IsVex3() bool { return (e & 0xff) == Vex3 }
 
-func (e Ex) ExpandDest() Ex {
-	switch e & 0xff {
-	case Rex:
-		return e | RexR
-	case Vex2:
-		return e & ^vex2R
-	case Vex3:
-		return e & ^vex3R
+type Extend int
+
+const (
+	ExtendRM    = 1 << iota // Extension of the ModR/M r/m field, SIB base field, or Opcode reg field
+	ExtendIndex             // Extension of the ModR/M reg field
+	ExtendReg               // Extension of the SIB index field
+
+	ExtendBase   = ExtendRM
+	ExtendOpcode = ExtendRM
+)
+
+func (e *Ex) Extend(r Reg, ext Extend) {
+	if r.Size() > S64 {
+		panic("TODO: vector extensions")
 	}
-	return e
+
+	switch r.Group() {
+	case 1:
+		*e |= Rex | Ex(ext)
+	case 2:
+		if r.Size() == S8 {
+			*e |= Rex
+		} else {
+			panic("invalid register group")
+		}
+	case 3:
+		panic("invalid register group")
+	}
 }
 
 // Addr represents the ModR/M and SIB addressing-form specifier bytes.

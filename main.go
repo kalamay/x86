@@ -15,7 +15,7 @@ func main() {
 		RBX,
 		Int(-123),
 		MakeMem(RBX).WithSize(S64),
-		MakeMem(RCX).WithSize(S32).WithIndex(EAX, S32).WithDisplacement(Int(12)),
+		MakeMem(RCX).WithSize(S32).WithIndex(EAX, S32).WithDisplacement(12),
 	}
 
 	fmt.Printf("operands:\n")
@@ -32,7 +32,6 @@ func main() {
 	e.MOV(EAX, Int(123))
 
 	for _, err := range e.Errors {
-		fmt.Printf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 	}
-	fmt.Printf("\n")
 }

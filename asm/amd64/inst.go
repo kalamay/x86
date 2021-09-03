@@ -45,49 +45,67 @@ type Inst struct {
 	Code   Code
 }
 
-func (in *Inst) Encode(b []byte, ops []Op) int {
-	n := 0
-	n += in.Prefix.Encode(b[n:])
-	n += in.Ex.Encode(b[n:]) // TODO handle register extension bits
-	n += in.Code.Encode(b[n:])
-
-	imt := Type(0)
-	imm := Op(nil)
-
-	switch in.Types.Kinds() {
+func encodeInt(b []byte, v uint64, s Size) int {
+	switch s {
 	default:
-		panic("TODO: check for vector instructions")
-	case MR:
-		panic("TODO: handle MR")
-	case RM:
-		panic("TODO: handle RM")
-	case RI:
-		if in.Types.At(0).IsOpcode() {
-			b[n-1] |= ops[0].(Reg).Index()
-		} else {
-			panic("TODO: handle RI")
+		panic("invalid type size")
+	case S8:
+		b[0] = byte(uint8(v))
+	case S16:
+		binary.LittleEndian.PutUint16(b, uint16(v))
+	case S32:
+		binary.LittleEndian.PutUint32(b, uint32(v))
+	case S64:
+		binary.LittleEndian.PutUint64(b, uint64(v))
+	}
+	return s.Bytes()
+}
+
+func (in *Inst) Encode(b []byte, ops []Op) int {
+	ex, code := in.Ex, in.Code
+	var (
+		addr Addr
+		disp uint32
+		imm  [8]byte
+		nimm int
+	)
+
+	t, ts := in.Types.Next()
+	for i := 0; t > 0; i++ {
+		switch v := ops[i].(type) {
+		case Int:
+			nimm = encodeInt(imm[:], uint64(v), t.ImmSize())
+		case Uint:
+			nimm = encodeInt(imm[:], uint64(v), t.ImmSize())
+		case Reg:
+			if t.IsOpcode() {
+				n := code.Len() - 1
+				code.Set(n, code.At(n)|v.Index())
+			} else {
+				addr.SetDirect(v)
+			}
+		case Mem:
+			disp = v.disp
 		}
-		imt, imm = in.Types.At(1), ops[1]
-	case MI:
-		b[n] = byte(ModRM(0).WithRegs(ops[0].(Reg)))
-		n++
-		imt, imm = in.Types.At(1), ops[1]
+
+		t, ts = ts.Next()
 	}
 
-	if imt != 0 {
-		switch imt.ImmSize() {
-		default:
-			panic("invalid type ize")
-		case S8:
-			b[n] = byte(uint8(ImmValue(imm)))
-		case S16:
-			binary.LittleEndian.PutUint16(b[n:], uint16(ImmValue(imm)))
-		case S32:
-			binary.LittleEndian.PutUint32(b[n:], uint32(ImmValue(imm)))
-		case S64:
-			binary.LittleEndian.PutUint64(b[n:], uint64(ImmValue(imm)))
-		}
-		n += imt.ImmSize().Bytes()
+	n := 0
+	n += in.Prefix.Encode(b[n:])
+	n += ex.Encode(b[n:])
+	n += code.Encode(b[n:])
+	n += addr.Encode(b[n:])
+	switch addr.DispSize() {
+	case S8:
+		b[n] = byte(disp)
+		n += 1
+	case S32:
+		binary.LittleEndian.PutUint32(b[n:], disp)
+		n += 4
+	}
+	if nimm > 0 {
+		n += copy(b[n:], imm[:nimm])
 	}
 
 	return n

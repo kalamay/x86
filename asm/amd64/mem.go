@@ -2,6 +2,7 @@ package amd64
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 )
 
@@ -12,7 +13,7 @@ type Mem struct {
 	scale Size
 	index Reg
 	base  Reg
-	disp  Op
+	disp  uint32
 }
 
 func MakeMem(base Reg) Mem {
@@ -40,8 +41,8 @@ func (m Mem) WithIndex(index Reg, scale Size) Mem {
 	return m
 }
 
-func (m Mem) WithDisplacement(op Op) Mem {
-	m.disp = op
+func (m Mem) WithDisplacement(disp uint32) Mem {
+	m.disp = disp
 	return m
 }
 
@@ -91,8 +92,8 @@ func (m Mem) String() string {
 	parts[n] = "["
 	n += 1
 
-	if m.disp != nil {
-		parts[n] = m.disp.String()
+	if m.disp > 0 {
+		parts[n] = strconv.FormatUint(uint64(m.disp), 10)
 		parts[n+1] = " + "
 		n += 2
 	}

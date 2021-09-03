@@ -1,39 +1,231 @@
 package amd64
 
-import "fmt"
+import (
+	"fmt"
+	"math/bits"
+)
 
-type RawCode [3]uint8
+type Code uint64
 
-type Code struct {
-	n   uint8
-	raw [3]byte
-}
+const (
+	C1 = 1 << (iota + 56)
+	C2
+	C3
+	C4
+	C5
+	C6
+	C7
+)
 
 func C(b ...byte) (c Code) {
-	for _, b := range b {
-		c.raw[c.n] = b
-		c.n++
+	for i, b := range b {
+		c.Set(i, b)
 	}
 	return
 }
 
-func (c Code) Len() int {
-	return int(c.n)
+func (c Code) Len() int       { return 8 - bits.LeadingZeros8(c.At(c.Cap())) }
+func (c Code) Cap() int       { return 7 }
+func (c Code) Has(i int) bool { return (c>>(56+i))&1 == 1 }
+func (c Code) At(i int) byte  { return byte(c >> (i << 3)) }
+
+func (c *Code) Set(i int, b byte) {
+	if i >= c.Cap() {
+		panic("invalid code index")
+	}
+	*c = (*c & ^(0xff << (i * 8))) | Code(b)<<(i*8) | 1<<(56+i)
 }
 
-func (c Code) Encode(dst []byte) int {
-	dst[c.n-1] = 0
-	return copy(dst, c.raw[:c.n])
+func (c *Code) Clear(i int) {
+	if i >= c.Cap() {
+		panic("invalid code index")
+	}
+	*c &= ^(0xff<<(i*8) | 1<<(56+i))
+}
+
+func (c Code) Encode(b []byte) int {
+	n := c.Len()
+	for i := 0; i < n; i++ {
+		b[i] = byte(c)
+		c >>= 8
+	}
+	return n
 }
 
 func (c Code) String() string {
-	switch c.n {
-	case 1:
-		return fmt.Sprintf("#%02x", c.raw[0])
-	case 2:
-		return fmt.Sprintf("#%02x%02x", c.raw[0], c.raw[1])
-	case 3:
-		return fmt.Sprintf("#%02x%02x%02x", c.raw[0], c.raw[1], c.raw[2])
-	}
-	return ""
+	n := c.Len()
+	return fmt.Sprintf("#%0*x", n*2, uint64(c)&0xffffffffffffff)
 }
+
+type Prefix Code
+
+const (
+	OpSize     Prefix = 0x66 | C1
+	AddrSize   Prefix = 0x67 | C1
+	AddrOpSize Prefix = (0x67 << 8) | 0x66 | C2
+)
+
+func (p Prefix) Len() int            { return Code(p).Len() }
+func (p Prefix) Cap() int            { return Code(p).Cap() }
+func (p *Prefix) Set(i int, b byte)  { (*Code)(p).Set(i, b) }
+func (p *Prefix) Clear(i int)        { (*Code)(p).Clear(i) }
+func (p Prefix) Encode(b []byte) int { return Code(p).Encode(b) }
+
+type Ex Code
+
+const (
+	Rex  Ex = 0b01000000 | C1
+	Vex2 Ex = 0b10000000_11000101 | C2
+	Vex3 Ex = 0b00000000_11100000_11000100 | C3
+
+	RexW = 0b00001000 | Rex
+	RexR = 0b00000100 | Rex
+	RexX = 0b00000010 | Rex
+	RexB = 0b00000001 | Rex
+
+	Vex3_0F   = 0b00000000_00000001_00000000 | Vex3
+	Vex3_0F38 = 0b00000000_00000010_00000000 | Vex3
+	Vex3_0F3A = 0b00000000_00000011_00000000 | Vex3
+
+	Vex256 Ex = 0b00000100
+
+	Vex3W = 0b10000000_00000000_00000000 | Vex3
+
+	/*
+		EVex Ex = 0b01100010_00000000_00000000_00000000
+		eVexMask = 0b00000000_00000000_00000000_00000000 | EVex
+	*/
+
+	vex2R Ex = 0b10000000_00000000
+	vex3R Ex = 0b00000000_10000000_00000000
+	vex3X Ex = 0b00000000_01000000_00000000
+	vex3B Ex = 0b00000000_00100000_00000000
+)
+
+func (e Ex) Len() int            { return Code(e).Len() }
+func (e Ex) Encode(b []byte) int { return Code(e).Encode(b) }
+
+func (e Ex) IsRex() bool  { return (e & 0xff) == Rex }
+func (e Ex) IsVex2() bool { return (e & 0xff) == Vex2 }
+func (e Ex) IsVex3() bool { return (e & 0xff) == Vex3 }
+
+func (e Ex) ExpandDest() Ex {
+	switch e & 0xff {
+	case Rex:
+		return e | RexR
+	case Vex2:
+		return e & ^vex2R
+	case Vex3:
+		return e & ^vex3R
+	}
+	return e
+}
+
+// Addr represents the ModR/M and SIB addressing-form specifier bytes.
+//
+// Many instructions that refer to an operand in memory have an addressing-form
+// specifier byte (called the ModR/M byte) following the primary opcode. Certain
+// encodings of the ModR/M byte require a second addressing byte (the SIB byte).
+// The base-plus-index and scale-plus-index forms of 32-bit addressing require
+// the SIB byte.
+//
+//           6         3         0     14        11         8
+//     ╭──────┬─────────┬─────────┬──────┬─────────┬─────────╮
+//     │ MOD  ╎   REG   ╎   R/M   │SCALE ╎  INDEX  ╎  BASE   │
+//     ╰──────┴─────────┴─────────┴──────┴─────────┴─────────╯
+//
+// MOD   - The mod field combines with the r/m field to form 32 possible values:
+//         eight registers and 24 addressing modes.
+// REG   - The reg/opcode field specifies either a register number or three more
+//         bits of opcode information. The purpose of the reg/opcode field is
+//         specified in the primary opcode.
+// R/M   - The r/m field can specify a register as an operand or it can be
+//         combined with the mod field to encode an addressing mode. Sometimes,
+//         certain combinations of the mod field and the r/m field are used to
+//         express opcode information for some instructions.
+// SCALE - The scale field specifies the scale factor.
+// INDEX - The index field specifies the register number of the index register.
+// BASE  - The base field specifies the register number of the base register.
+type Addr Code
+
+const (
+	ModDisp0 = iota << 6
+	ModDisp8
+	ModDisp32
+	ModDirect
+)
+
+func (a Addr) Len() int            { return Code(a).Len() }
+func (a Addr) Encode(b []byte) int { return Code(a).Encode(b) }
+
+func (a Addr) DispSize() Size { return S0 }
+
+func (a *Addr) SetDirect(r1 Reg, r2 ...Reg) {
+	(*Code)(a).Set(0, byte(ModRMDirect(r1, r2...)))
+}
+
+// ModRM defintes the addressing-form specifier byte.
+//
+// Many instructions that refer to an operand in memory have an addressing-form
+// specifier byte (called the ModR/M byte) following the primary opcode. The
+// ModR/M byte contains three fields of information:
+//
+//           6         3         0
+//     ╭──────┬─────────┬─────────╮
+//     │ MOD  ╎   REG   ╎   R/M   │
+//     ╰──────┴─────────┴─────────╯
+//
+// MOD - The mod field combines with the r/m field to form 32 possible values:
+//       eight registers and 24 addressing modes.
+// REG - The reg/opcode field specifies either a register number or three more
+//       bits of opcode information. The purpose of the reg/opcode field is
+//       specified in the primary opcode.
+// R/M - The r/m field can specify a register as an operand or it can be
+//       combined with the mod field to encode an addressing mode. Sometimes,
+//       certain combinations of the mod field and the r/m field are used to
+//       express opcode information for some instructions.
+type ModRM triple
+
+func ModRMDirect(r1 Reg, r2 ...Reg) ModRM {
+	m := ModRM(triple(ModDirect).set1(r1.Index()))
+	if len(r2) > 0 {
+		m = ModRM(triple(m).set2(r2[0].Index()))
+	}
+	return m
+}
+
+// SIB defintes the secondary addressing-form specifier byte.
+//
+// Certain encodings of the ModR/M byte require a second addressing byte
+// (the SIB byte). The base-plus-index and scale-plus-index forms of 32-bit
+// addressing require the SIB byte. The SIB byte includes the following fields:
+//
+//           6         3         0
+//     ╭──────┬─────────┬─────────╮
+//     │SCALE ╎  INDEX  ╎  BASE   │
+//     ╰──────┴─────────┴─────────╯
+//
+// SCALE - The scale field specifies the scale factor.
+// INDEX - The index field specifies the register number of the index register.
+// BASE  - The base field specifies the register number of the base register.
+type SIB triple
+
+type triple byte
+
+const (
+	// TODO remove types?
+	triM1 triple = 0b00000111
+	triM2 triple = 0b00111000
+	triM3 triple = 0b11000000
+	triS1 triple = 0
+	triS2 triple = 3
+	triS3 triple = 6
+)
+
+func (t triple) v1() uint8 { return uint8((t & triM1) >> triS1) }
+func (t triple) v2() uint8 { return uint8((t & triM2) >> triS2) }
+func (t triple) v3() uint8 { return uint8((t & triM3) >> triS3) }
+
+func (t triple) set1(v uint8) triple { return (t & ^triM1) | (triple(v) & triM1) }
+func (t triple) set2(v uint8) triple { return (t & ^triM2) | ((triple(v) << triS2) & triM2) }
+func (t triple) set3(v uint8) triple { return (t & ^triM3) | ((triple(v) << triS3) & triM3) }

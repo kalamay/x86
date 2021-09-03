@@ -75,14 +75,3 @@ func (i Uint) MinSize() Size {
 	}
 	return S64
 }
-
-func ImmValue(op Op) uint64 {
-	switch v := op.(type) {
-	default:
-		panic("invalid operand type")
-	case Int:
-		return uint64(v)
-	case Uint:
-		return uint64(v)
-	}
-}

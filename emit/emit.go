@@ -2,11 +2,14 @@ package emit
 
 import (
 	"bytes"
+	"errors"
 	"io"
 
 	. "github.com/kalamay/x86/asm/amd64"
 	. "github.com/kalamay/x86/asm/amd64/inst"
 )
+
+var ErrInstLength = errors.New("instruction length exceeded 15 bytes")
 
 type Emitter interface {
 	Emit(w io.Writer, in *InstSet, ops []Op) error
@@ -37,9 +40,13 @@ func (e *Emit) MOV(ops ...Op) error { return e.Emit(MOV, ops) }
 type X86 struct{}
 
 func (x X86) Emit(w io.Writer, in *InstSet, ops []Op) (err error) {
-	n, b := 0, [15]byte{}
+	n, b := 0, [16]byte{}
 	if n, err = in.Encode(b[:], ops); err == nil {
-		_, err = w.Write(b[:n])
+		if n > 15 {
+			err = ErrInstLength
+		} else {
+			_, err = w.Write(b[:n])
+		}
 	}
 	return
 }

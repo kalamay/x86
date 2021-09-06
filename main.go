@@ -11,19 +11,14 @@ import (
 )
 
 func main() {
-	ops := []Op{
-		RBX,
-		Int(-123),
-		MakeMem(RBX).WithSize(S64),
-		MakeMem(RCX).WithSize(S32).WithIndex(EAX, S32).WithDisplacement(12),
-	}
+	ops := []Op{RAX, Int(-1073741824)}
 
 	fmt.Printf("operands:\n")
 	for i, op := range ops {
 		fmt.Printf("  %d: %s\n", i, op)
 	}
 
-	if inst, err := MOV.Select(ops[:2]); err == nil {
+	if inst, err := ADD.Select(ops); err == nil {
 		fmt.Printf("match: %s\n", inst.Types)
 	}
 
@@ -34,4 +29,5 @@ func main() {
 	for _, err := range e.Errors {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 	}
+	fmt.Printf("\n")
 }

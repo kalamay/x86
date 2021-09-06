@@ -14,22 +14,17 @@ type (
 func (_ Int) Kind() Kind      { return KindImm }
 func (_ Int) Size() Size      { return S0 }
 func (i Int) Validate() error { return nil }
-func (i Int) Name() string    { return immsTypes[i.MinSize()][1:] }
+func (i Int) Name() string    { return "imm" }
 func (i Int) String() string  { return fmt.Sprintf("%d", i) }
 
-func (i Int) Match(t Type) bool {
-	return t.IsImm() && i.MinSize() <= t.ImmSize()
-	/*
-		// This is the strict sign extention match, disable this for now.
-		if !t.IsImm() {
-			return false
-		}
-		s, is := t.ImmSize(), i.MinSize()
-		if is > s {
-			return false
-		}
-		return t.IsSignExt() || i >= 0
-	*/
+func (i Int) Match(t Type, _ Size) bool {
+	if !t.IsImm() || (t.IsZeroExt() && i < 0) {
+		return false
+	}
+	if !t.IsSignExt() && i >= 0 {
+		return t.ImmSize() >= Uint(i).MinSize()
+	}
+	return t.ImmSize() >= i.MinSize()
 }
 
 func (i Int) MinSize() Size {
@@ -51,22 +46,20 @@ func (i Int) Encode(b []byte, s Size) int {
 func (_ Uint) Kind() Kind      { return KindImm }
 func (_ Uint) Size() Size      { return S0 }
 func (i Uint) Validate() error { return nil }
-func (i Uint) Name() string    { return immzTypes[i.MinSize()][1:] }
+func (i Uint) Name() string    { return "imm" }
 func (i Uint) String() string  { return fmt.Sprintf("%d", i) }
 
-func (i Uint) Match(t Type) bool {
-	return t.IsImm() && i.MinSize() <= t.ImmSize()
-	/*
-		// This is the strict sign extention match, disable this for now.
-		if !t.IsImm() {
-			return false
-		}
-		s, is := t.ImmSize(), i.MinSize()
-		if is > s {
-			return false
-		}
-		return t.IsZeroExt() || i < Uint(1)<<(s.Bits()-1)
-	*/
+func (i Uint) Match(t Type, dst Size) bool {
+	if !t.IsImm() {
+		return false
+	}
+	s := t.ImmSize()
+	if t.IsSignExt() {
+		b := s.Bits() - 1
+		n := i >> b
+		return n == 0 || n == Uint(dst.MaxUint()>>b)
+	}
+	return s >= i.MinSize()
 }
 
 func (i Uint) MinSize() Size {

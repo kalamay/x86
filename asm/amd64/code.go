@@ -79,6 +79,7 @@ func (p Prefix) Len() int            { return Code(p).Len() }
 func (p Prefix) Cap() int            { return Code(p).Cap() }
 func (p *Prefix) Set(i int, b byte)  { (*Code)(p).Set(i, b) }
 func (p *Prefix) Clear(i int)        { (*Code)(p).Clear(i) }
+func (p *Prefix) Insert(b byte)      { (*Code)(p).Insert(b) }
 func (p Prefix) Encode(b []byte) int { return Code(p).Encode(b) }
 
 type Ex Code
@@ -115,9 +116,9 @@ const (
 func (e Ex) Len() int            { return Code(e).Len() }
 func (e Ex) Encode(b []byte) int { return Code(e).Encode(b) }
 
-func (e Ex) IsRex() bool  { return (e & 0xff) == Rex }
-func (e Ex) IsVex2() bool { return (e & 0xff) == Vex2 }
-func (e Ex) IsVex3() bool { return (e & 0xff) == Vex3 }
+func (e Ex) IsRex() bool  { return (e & (0xF0 | C1)) == Rex }
+func (e Ex) IsVex2() bool { return (e & (0xFF | C1)) == Vex2 }
+func (e Ex) IsVex3() bool { return (e & (0xFF | C1)) == Vex3 }
 
 type Extend int
 
@@ -136,12 +137,14 @@ func (e *Ex) Extend(r Reg, ext Extend) {
 	}
 
 	switch r.Group() {
+	case 0:
+		if r.Size() == S8 && r.Index() > 3 {
+			*e |= Rex
+		}
 	case 1:
 		*e |= Rex | Ex(ext)
 	case 2:
-		if r.Size() == S8 {
-			*e |= Rex
-		} else {
+		if r.Size() != S8 {
 			panic("invalid register group")
 		}
 	case 3:
@@ -224,6 +227,7 @@ func (a *Addr) SetIndirect(mem Mem) {
 		d = ModDisp8
 	}
 
+	// TODO: check for rmIndirect and rmDisp32
 	if mem.scale == S0 {
 		(*Code)(a).Set(0, byte(m.WithIndirectReg(d, mem.base)))
 	} else {

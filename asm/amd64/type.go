@@ -19,16 +19,17 @@ const (
 //
 //       7  6        3        0  F  E  D  C  B  A  9  8
 //     ╭──┬──┬────────┬────────┬──┬──┬──┬──┬──┬──┬──┬──╮
-//     │ A╎ R╎ SIZE2  ╎ SIZE1  │  ╎AP╎SP╎SR╎RA╎FP╎SX╎OR│
+//     │ A╎ R╎ SIZE2  ╎ SIZE1  │AP╎SP╎SR╎RA╎ZX╎SX╎ER╎OR│
 //     ╰──┴──┴────────┴────────┴──┴──┴──┴──┴──┴──┴──┴──╯
 //
-// SIZE1 - Size for KindMem
+// SIZE1 - Size for KindMem or register index when ER is set.
 // SIZE2 - Size for KindImm, KindReg, or a secondary memory size.
 //  R - Flag enabling KindReg and disabling KindImm
 //  A - Flag enabling KindMem and disabling KindImm
 // OR - Flag specifying opcode merge behavior of KindReg
+// ER - Flag specifying register is an explicit value.
 // SX - Flag specifying sign-extension mode
-// FP - Flag specifying that the operand is a floating point value.
+// ZX - Flag specifying zero-extension mode
 // RA - Flag specifying that KindMem must be a relative address.
 // SR - Flag specifying that KindReg must be a segment register.
 // SP - Flag specifying a segment far pointer. For KindReg, this requires a
@@ -42,12 +43,14 @@ type Type uint16
 
 const (
 	TOR = 1 << (iota + 2 + (2 * SizeBits)) // opcode-register flag
+	TER                                    // explicit-register flag
 	TSX                                    // sign-extension flag
-	TFP                                    // floating-point flag
+	TZX                                    // zero-extension flag
 	TRA                                    // relative-address flag
 	TSR                                    // segment-register flag
 	TSP                                    // segment-pointer flag
 	TAP                                    // address-pair flag
+	TFP = TSX | TZX                        // floating-point flag
 
 	typeBits = 16
 )
@@ -69,40 +72,57 @@ const (
 	TR512 = KindReg | Type(S512<<SizeBits) // zmm
 
 	// Memory operand
-	TA8   = KindMem | Type(S8)   // m8
-	TA16  = KindMem | Type(S16)  // m16
-	TA32  = KindMem | Type(S32)  // m32
-	TA64  = KindMem | Type(S64)  // m64
-	TA128 = KindMem | Type(S128) // m128
-	TA256 = KindMem | Type(S256) // m256
-	TA512 = KindMem | Type(S512) // m512
+	TP8   = KindMem | Type(S8)   // m8
+	TP16  = KindMem | Type(S16)  // m16
+	TP32  = KindMem | Type(S32)  // m32
+	TP64  = KindMem | Type(S64)  // m64
+	TP128 = KindMem | Type(S128) // m128
+	TP256 = KindMem | Type(S256) // m256
+	TP512 = KindMem | Type(S512) // m512
 
 	// Operand that is either a register or memory
-	TM8   = TR8 | TA8     // r/m8
-	TM16  = TR16 | TA16   // r/m16
-	TM32  = TR32 | TA32   // r/m32
-	TM64  = TR64 | TA64   // r/m64
-	TM128 = TR128 | TA128 // xmm/m128
-	TM256 = TR256 | TA256 // ymm/m256
-	TM512 = TR512 | TA512 // zmm/m512
+	TM8   = TR8 | TP8     // r/m8
+	TM16  = TR16 | TP16   // r/m16
+	TM32  = TR32 | TP32   // r/m32
+	TM64  = TR64 | TP64   // r/m64
+	TM128 = TR128 | TP128 // xmm/m128
+	TM256 = TR256 | TP256 // ymm/m256
+	TM512 = TR512 | TP512 // zmm/m512
 )
 
 func (t Type) ImmSize() Size { return t.RegSize() }
 func (t Type) RegSize() Size { return Size((t >> SizeBits) & SizeMask) }
-func (t Type) MemSize() Size { return Size(t & SizeMask) }
+
+func (t Type) MemSize() Size {
+	if !t.IsMem() {
+		return S0
+	}
+	return Size(t & SizeMask)
+}
+
+func (t Type) RegID() int {
+	if !t.IsExplicit() {
+		return -1
+	}
+	return int(t & SizeMask)
+}
 
 func (t Type) Kind() Kind       { return Kind(t & (KindReg | KindMem)) }
 func (t Type) IsImm() bool      { return t.Kind() == KindImm }
-func (t Type) IsReg() bool      { return (t & KindReg) != 0 }
-func (t Type) IsMem() bool      { return (t & KindMem) != 0 }
-func (t Type) IsOpcode() bool   { return (t & TOR) != 0 }
-func (t Type) IsSignExt() bool  { return (t & TSX) != 0 }
-func (t Type) IsZeroExt() bool  { return (t & TSX) == 0 }
-func (t Type) IsFloat() bool    { return (t & TFP) != 0 }
+func (t Type) IsReg() bool      { return (t & KindReg) == KindReg }
+func (t Type) IsMem() bool      { return (t & (KindMem | TER)) == KindMem }
+func (t Type) IsOpcode() bool   { return (t & TOR) == TOR }
+func (t Type) IsExplicit() bool { return (t & TER) == TER }
+func (t Type) IsSignExt() bool  { return (t & TFP) == TSX }
+func (t Type) IsZeroExt() bool  { return (t & TFP) == TZX }
+func (t Type) IsFloat() bool    { return (t & TFP) == TFP }
+
+/*
 func (t Type) IsRelAddr() bool  { return (t & TRA) != 0 }
 func (t Type) IsSegReg() bool   { return (t & TSR) != 0 }
 func (t Type) IsSegPtr() bool   { return (t & TSP) != 0 }
 func (t Type) IsAddrPair() bool { return (t & TAP) != 0 }
+*/
 
 func (t Type) String() string {
 	ms, rs := t.MemSize(), t.RegSize()
@@ -114,7 +134,11 @@ func (t Type) String() string {
 		}
 		return immsTypes[rs]
 	case KindReg:
-		return regTypes[rs]
+		s := regTypes[rs]
+		if t.IsExplicit() {
+			s += "{" + regNames[rs-1][t.RegID()] + "}"
+		}
+		return s
 	case KindMem:
 		return memTypes[ms]
 	case KindReg | KindMem:
@@ -190,6 +214,11 @@ const (
 	M32_I32  = (TypeSet(TM32) << T1) | (TypeSet(TI32) << T2)     // r/m32 ← r32
 	M64_I8s  = (TypeSet(TM64) << T1) | (TypeSet(TI8|TSX) << T2)  // r/m64 ← r8
 	M64_I32s = (TypeSet(TM64) << T1) | (TypeSet(TI32|TSX) << T2) // r/m64 ← r32 (sign extended)
+
+	A8_I8    = (TypeSet(TR8|TER) << T1) | (TypeSet(TI8) << T2)       // al ← imm8 (opcode merged)
+	A16_I16  = (TypeSet(TR16|TER) << T1) | (TypeSet(TI16) << T2)     // ax ← imm16 (opcode merged)
+	A32_I32  = (TypeSet(TR32|TER) << T1) | (TypeSet(TI32) << T2)     // eax ← imm32 (opcode merged)
+	A64_I32s = (TypeSet(TR64|TER) << T1) | (TypeSet(TI32|TSX) << T2) // rax ← r32 (sign extended)
 )
 
 func T(t ...Type) (ts TypeSet) {
@@ -216,13 +245,19 @@ func (ts TypeSet) Kinds() TypeSet {
 }
 
 func (ts TypeSet) Match(op []Op) bool {
+	dst := S0
+	if len(op) > 0 {
+		dst = op[0].Size()
+	}
+
 	t, ts := ts.Next()
 	for _, op := range op {
-		if !op.Match(t) {
+		if !op.Match(t, dst) {
 			return false
 		}
 		t, ts = ts.Next()
 	}
+
 	return ts == 0
 }
 

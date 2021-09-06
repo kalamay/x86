@@ -6,33 +6,28 @@ var ErrRegSizeInvalid = errors.New("reg size invalid")
 
 type Reg uint8
 
-func (_ Reg) Kind() Kind {
-	return KindReg
+func (_ Reg) Kind() Kind     { return KindReg }
+func (r Reg) Size() Size     { return Size(r & SizeMask) }
+func (r Reg) ID() int        { return int(r >> SizeBits) }
+func (r Reg) Index() uint8   { return uint8((r >> SizeBits) & 0b111) }
+func (r Reg) Group() uint8   { return uint8(r >> (SizeBits + 3)) }
+func (r Reg) Name() string   { return regNames[r.Size()-1][r.ID()] }
+func (r Reg) String() string { return r.Name() }
+
+func (r Reg) IsHighByte() bool {
+	return (r & 0b11100111) == 0b10100001 // r.Group() == 2 && r.Size() == S8
 }
 
-func (r Reg) Size() Size {
-	return Size(r & SizeMask)
-}
-
-func (r Reg) ID() int {
-	return int(r >> SizeBits)
-}
-
-func (r Reg) Index() uint8 {
-	return uint8((r >> SizeBits) & 0b111)
-}
-
-func (r Reg) Group() uint8 {
-	return uint8(r >> (SizeBits + 3))
-}
-
-func (r Reg) Match(t Type) bool {
+func (r Reg) Match(t Type, _ Size) bool {
 	// TODO: check other register flags to support 32-bit
 	if !t.IsReg() {
 		return false
 	}
 	s, rs := t.RegSize(), r.Size()
 	if s > S0 {
+		if t.IsExplicit() && t.RegID() != r.ID() {
+			return false
+		}
 		return s == rs
 	}
 	return rs > S0 && S16 <= rs && rs <= S64
@@ -46,39 +41,31 @@ func (r Reg) Validate() error {
 	return nil
 }
 
-func (r Reg) Name() string {
-	return regNames[r.Size()-1][r.ID()]
-}
-
-func (r Reg) String() string {
-	return r.Name()
-}
-
 const (
 	AL = Reg(iota<<SizeBits | S8)
 	CL
 	DL
 	BL
-	AH
-	CH
-	DH
-	BH
-	R8L
-	R9L
-	R10L
-	R11L
-	R12L
-	R13L
-	R14L
-	R15L
-	_
-	_
-	_
-	_
 	SPL
 	BPL
 	SIL
 	DIL
+	R8B
+	R9B
+	R10B
+	R11B
+	R12B
+	R13B
+	R14B
+	R15B
+	_
+	_
+	_
+	_
+	AH
+	CH
+	DH
+	BH
 )
 
 const (
@@ -212,7 +199,7 @@ const (
 )
 
 var regNames = [...][]string{
-	{"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh", "r8l", "r9l", "r10l", "r11l", "r12l", "r13l", "r14l", "r15l", "%!", "%!", "%!", "%!", "spl", "bpl", "sil", "dil"},
+	{"al", "cl", "dl", "bl", "spl", "bpl", "sil", "dil", "r8b", "r9b", "r10b", "r11b", "r12b", "r13b", "r14b", "r15b", "%!", "%!", "%!", "%!", "ah", "ch", "dh", "bh"},
 	{"ax", "cx", "dx", "bx", "sp", "bp", "si", "di", "r8w", "r9w", "r10w", "r11w", "r12w", "r13w", "r14w", "r15w"},
 	{"eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"},
 	{"rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"},

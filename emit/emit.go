@@ -18,18 +18,17 @@ type Emitter interface {
 type Emit struct {
 	Errors  []error
 	Emitter Emitter
-
-	w io.Writer
+	Writer  io.Writer
 }
 
 func New(w io.Writer) *Emit {
-	return &Emit{Emitter: X86{}, w: w}
+	return &Emit{Emitter: X86{}, Writer: w}
 }
 
 func (e *Emit) Emit(in *InstSet, ops []Op) (err error) {
-	if err = e.Emitter.Emit(e.w, in, ops); err != nil {
+	if err = e.Emitter.Emit(e.Writer, in, ops); err != nil {
 		e.Errors = append(e.Errors, err)
-		e.w = io.Discard
+		e.Writer = io.Discard
 	}
 	return
 }

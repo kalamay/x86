@@ -14,6 +14,9 @@ type InstSet struct {
 func (s *InstSet) Select(ops []Op) (*Inst, error) {
 	m, sized := TypeSet(0), false
 	for i, op := range ops {
+		if err := op.Validate(); err != nil {
+			return nil, err
+		}
 		if op.Size() > S0 {
 			sized = true
 		}
@@ -35,7 +38,7 @@ func (s *InstSet) Encode(b []byte, ops []Op) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return in.Encode(b, ops), nil
+	return in.Encode(b, ops)
 }
 
 type Inst struct {
@@ -45,35 +48,48 @@ type Inst struct {
 	Code   Code
 }
 
-func (in *Inst) Encode(b []byte, ops []Op) int {
-	ex, code := in.Ex, in.Code
+func (in *Inst) Encode(b []byte, ops []Op) (int, error) {
+	prefix, ex, code := in.Prefix, in.Ex, in.Code
 	var (
-		addr Addr
-		disp uint32
-		imm  [8]byte
-		nimm int
+		addr  Addr
+		disp  uint32
+		imm   [8]byte
+		nimm  int
+		high  Reg
+		wop   bool
+		waddr bool
 	)
 
 	t, ts := in.Types.Next()
 	for i := 0; t > 0; i++ {
 		switch v := ops[i].(type) {
 		case Int:
+			wop = wop || t.ImmSize() == S16
 			nimm = v.Encode(imm[:], t.ImmSize())
 		case Uint:
+			wop = wop || t.ImmSize() == S16
 			nimm = v.Encode(imm[:], t.ImmSize())
 		case Reg:
-			if t.IsOpcode() {
-				n := code.Len() - 1
-				code.Set(n, code.At(n)|v.Index())
-				ex.Extend(v, ExtendOpcode)
-			} else if t.Kind() == KindReg {
-				addr.SetReg(v)
-				ex.Extend(v, ExtendReg)
-			} else {
-				addr.SetDirect(v)
-				ex.Extend(v, ExtendBase)
+			wop = wop || t.RegSize() == S16
+			if high == 0 && v.IsHighByte() {
+				high = v
+			}
+			if !t.IsExplicit() {
+				if t.IsOpcode() {
+					n := code.Len() - 1
+					code.Set(n, code.At(n)|v.Index())
+					ex.Extend(v, ExtendOpcode)
+				} else if t.Kind() == KindReg {
+					addr.SetReg(v)
+					ex.Extend(v, ExtendReg)
+				} else {
+					addr.SetDirect(v)
+					ex.Extend(v, ExtendBase)
+				}
 			}
 		case Mem:
+			wop = wop || t.MemSize() == S16
+			waddr = waddr || v.base.Size() == S32
 			addr.SetIndirect(v)
 			ex.Extend(v.index, ExtendIndex)
 			ex.Extend(v.base, ExtendBase)
@@ -83,8 +99,19 @@ func (in *Inst) Encode(b []byte, ops []Op) int {
 		t, ts = ts.Next()
 	}
 
+	if ex.IsRex() && high != 0 {
+		return 0, fmt.Errorf("cannot encode register '%s' in REX-prefixed instruction", high.Name())
+	}
+
+	if waddr {
+		prefix.Insert(0x67)
+	}
+	if wop {
+		prefix.Insert(0x66)
+	}
+
 	n := 0
-	n += in.Prefix.Encode(b[n:])
+	n += prefix.Encode(b[n:])
 	n += ex.Encode(b[n:])
 	n += code.Encode(b[n:])
 	n += addr.Encode(b[n:])
@@ -100,5 +127,5 @@ func (in *Inst) Encode(b []byte, ops []Op) int {
 		n += copy(b[n:], imm[:nimm])
 	}
 
-	return n
+	return n, nil
 }

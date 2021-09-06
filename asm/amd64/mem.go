@@ -2,11 +2,12 @@ package amd64
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 )
 
-var ErrMemBase = errors.New("memory base register invalid")
+var ErrMemBase = errors.New("base register not provided")
 
 type Mem struct {
 	size  Size
@@ -54,7 +55,7 @@ func (m Mem) Size() Size {
 	return m.size
 }
 
-func (m Mem) Match(t Type) bool {
+func (m Mem) Match(t Type, _ Size) bool {
 	// TODO: check other memory flags to support 32-bit
 	if !t.IsMem() {
 		return false
@@ -73,6 +74,15 @@ func (m Mem) Validate() error {
 	if m.base.Validate() != nil {
 		return ErrMemBase
 	}
+
+	bs, is := m.base.Size(), m.index.Size()
+	if bs != S64 && bs != S32 {
+		return fmt.Errorf("invalid %d-bit base register", bs.Bits())
+	}
+	if is != S0 && is != bs {
+		return fmt.Errorf("base register is %d-bit, but index is %d-bit", bs.Bits(), is.Bits())
+	}
+
 	return nil
 }
 
@@ -92,12 +102,6 @@ func (m Mem) String() string {
 	parts[n] = "["
 	n += 1
 
-	if m.disp > 0 {
-		parts[n] = strconv.FormatUint(uint64(m.disp), 10)
-		parts[n+1] = " + "
-		n += 2
-	}
-
 	parts[n] = m.base.String()
 	n += 1
 
@@ -111,6 +115,12 @@ func (m Mem) String() string {
 		n += 4
 	}
 
+	if m.disp > 0 {
+		parts[n] = " + "
+		parts[n+1] = strconv.FormatUint(uint64(m.disp), 10)
+		n += 2
+	}
+
 	parts[n] = "]"
 	n += 1
 
@@ -118,4 +128,4 @@ func (m Mem) String() string {
 }
 
 var memScale = [...]string{"0", "1", "2", "x", "4", "x", "x", "x", "8"}
-var memNames = [...]string{"", "BYTE PTR", "WORD PTR", "DWORD PTR", "QWORD PTR", "m128", "m256"}
+var memNames = [...]string{"", "BYTE PTR", "WORD PTR", "DWORD PTR", "QWORD PTR", "XMMWORD PTR", "YMMWORD PTR", "ZMMWORD PTR"}

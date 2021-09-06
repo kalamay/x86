@@ -7,7 +7,7 @@ type Op interface {
 	Name() string
 	Kind() Kind
 	Size() Size
-	Match(t Type) bool
+	Match(t Type, dst Size) bool
 	Validate() error
 }
 

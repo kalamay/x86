@@ -148,6 +148,7 @@ var mem = [...][]Op{
 
 func collectMem(s Size) []Op {
 	return []Op{
+		MakeMem(RDX),
 		MakeMem(RAX).WithSize(s),
 		MakeMem(RBX).WithSize(s).WithIndex(RDX, S32),
 		MakeMem(RCX).WithSize(s).WithIndex(RBP, S64).WithDisplacement(16),

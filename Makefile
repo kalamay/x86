@@ -6,5 +6,5 @@ ENCODE_TESTS:= $(INST_FILES:$(INST_DIR)/%.go=$(ENCODE_DIR)/%_test.go)
 tests: $(ENCODE_TESTS)
 	go test ./...
 
-$(ENCODE_DIR)/%_test.go: $(INST_DIR)/%.go ./test/gen.go
+$(ENCODE_DIR)/%_test.go: $(INST_DIR)/%.go ./test/gen.go ./test/util.go
 	go run ./test/gen.go -n $* -o $@

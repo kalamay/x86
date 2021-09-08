@@ -3,7 +3,26 @@ package amd64
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
 )
+
+var lock sync.RWMutex
+var insts = map[string]*InstSet{}
+
+func NewInst(name string, size Size, inst []Inst) *InstSet {
+	s := &InstSet{name, size, inst}
+	lock.Lock()
+	insts[name] = s
+	lock.Unlock()
+	return s
+}
+
+func LookupInst(name string) (*InstSet, bool) {
+	lock.RLock()
+	s, ok := insts[name]
+	lock.RUnlock()
+	return s, ok
+}
 
 type InstSet struct {
 	Name string

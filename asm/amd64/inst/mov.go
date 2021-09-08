@@ -2,7 +2,7 @@ package inst
 
 import . "github.com/kalamay/x86/asm/amd64"
 
-var MOV = &InstSet{"MOV", S32, []Inst{
+var MOV = NewInst("MOV", S32, []Inst{
 	{M8_R8, 0, 0, C1 | 0x88},       // Move r8 to r/m8.
 	{M16_R16, 0, 0, C1 | 0x89},     // Move r16 to r/m16.
 	{M32_R32, 0, 0, C1 | 0x89},     // Move r32 to r/m32.
@@ -19,4 +19,4 @@ var MOV = &InstSet{"MOV", S32, []Inst{
 	{M32_I32, 0, 0, C1 | 0xC7},     // Move imm32 to r/m32.
 	{M64_I32s, 0, RexW, C1 | 0xC7}, // Move imm32 sign extended to 64-bits to r/m64.
 	{O64_I64, 0, RexW, C1 | 0xB8},  // Move imm64 to r64.
-}}
+})

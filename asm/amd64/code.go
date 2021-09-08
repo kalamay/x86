@@ -236,7 +236,7 @@ func (a *Addr) SetIndirect(mem Mem) {
 	}
 }
 
-// ModRM defintes the addressing-form specifier byte.
+// ModRM defines the addressing-form specifier byte.
 //
 // Many instructions that refer to an operand in memory have an addressing-form
 // specifier byte (called the ModR/M byte) following the primary opcode. The

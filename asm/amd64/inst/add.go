@@ -2,7 +2,7 @@ package inst
 
 import . "github.com/kalamay/x86/asm/amd64"
 
-var ADD = &InstSet{"ADD", S32, []Inst{
+var ADD = NewInst("ADD", S32, []Inst{
 	{A8_I8, 0, 0, C(0x04)},       // Add imm8 to AL.
 	{M8_I8, 0, 0, C(0x80)},       // Add imm8 to r/m8.
 	{M16_I8s, 0, 0, C(0x83)},     // Add sign-extended imm8 to r/m16.
@@ -22,4 +22,4 @@ var ADD = &InstSet{"ADD", S32, []Inst{
 	{R16_M16, 0, 0, C(0x03)},     // Add r/m16 to r16.
 	{R32_M32, 0, 0, C(0x03)},     // Add r/m32 to r32.
 	{R64_M64, 0, RexW, C(0x03)},  // Add r/m64 to r64.
-}}
+})

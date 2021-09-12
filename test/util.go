@@ -62,7 +62,7 @@ func Compare(t *testing.T, in *InstSet, expect []Expect) {
 }
 
 func OperandsOf(types TypeSet) ([][]Op, int) {
-	ops, perms, i := [4][]Op{}, 0, 0
+	ops, perms, i := [4][]Op{}, 1, 0
 	ty, ts := types.Next()
 	for ; ty > 0; i++ {
 		if ty.IsImm() {
@@ -74,11 +74,7 @@ func OperandsOf(types TypeSet) ([][]Op, int) {
 		if ty.IsMem() {
 			ops[i] = append(ops[i], mem[ty.MemSize()]...)
 		}
-		if i == 0 {
-			perms = len(ops[i])
-		} else {
-			perms *= len(ops[i])
-		}
+		perms *= len(ops[i])
 		ty, ts = ts.Next()
 	}
 	return ops[:i], perms

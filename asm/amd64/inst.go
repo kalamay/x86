@@ -30,18 +30,38 @@ type InstSet struct {
 	Inst []Inst
 }
 
+type Inst struct {
+	Types  TypeSet
+	Prefix Prefix
+	Ex     Ex
+	Code   Code
+}
+
+func (s *InstSet) OperandPrefix(op Size) bool {
+	switch op {
+	case S16:
+		return s.Size == S32
+	case S32:
+		return s.Size == S16
+	}
+	return false
+}
+
 func (s *InstSet) Select(ops []Op) (*Inst, error) {
-	m, sized := TypeSet(0), false
+	m, mems, sized := TypeSet(0), 0, false
 	for i, op := range ops {
 		if err := op.Validate(); err != nil {
 			return nil, err
+		}
+		if op.Kind() == KindMem {
+			mems++
 		}
 		if op.Size() > S0 {
 			sized = true
 		}
 		m |= TypeSet(op.Kind()) << (i * typeBits)
 	}
-	if !sized {
+	if mems > 0 && !sized {
 		return nil, fmt.Errorf("ambiguous operand size for %q", s.Name)
 	}
 	for i := 0; i < len(s.Inst); i++ {
@@ -57,17 +77,7 @@ func (s *InstSet) Encode(b []byte, ops []Op) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return in.Encode(b, ops)
-}
 
-type Inst struct {
-	Types  TypeSet
-	Prefix Prefix
-	Ex     Ex
-	Code   Code
-}
-
-func (in *Inst) Encode(b []byte, ops []Op) (int, error) {
 	prefix, ex, code := in.Prefix, in.Ex, in.Code
 	var (
 		addr  Addr
@@ -83,13 +93,13 @@ func (in *Inst) Encode(b []byte, ops []Op) (int, error) {
 	for i := 0; t > 0; i++ {
 		switch v := ops[i].(type) {
 		case Int:
-			wop = wop || t.ImmSize() == S16
+			wop = wop || s.OperandPrefix(t.ImmSize())
 			nimm = v.Encode(imm[:], t.ImmSize())
 		case Uint:
-			wop = wop || t.ImmSize() == S16
+			wop = wop || s.OperandPrefix(t.ImmSize())
 			nimm = v.Encode(imm[:], t.ImmSize())
 		case Reg:
-			wop = wop || t.RegSize() == S16
+			wop = wop || s.OperandPrefix(t.RegSize())
 			if high == 0 && v.IsHighByte() {
 				high = v
 			}
@@ -107,7 +117,7 @@ func (in *Inst) Encode(b []byte, ops []Op) (int, error) {
 				}
 			}
 		case Mem:
-			wop = wop || t.MemSize() == S16
+			wop = wop || s.OperandPrefix(t.MemSize())
 			waddr = waddr || v.base.Size() == S32
 			addr.SetIndirect(v)
 			ex.Extend(v.index, ExtendIndex)

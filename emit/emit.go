@@ -35,6 +35,7 @@ func (e *Emit) Emit(in *InstSet, ops []Op) (err error) {
 
 func (e *Emit) ADD(ops ...Op) error { return e.Emit(ADD, ops) }
 func (e *Emit) MOV(ops ...Op) error { return e.Emit(MOV, ops) }
+func (e *Emit) RET(ops ...Op) error { return e.Emit(RET, ops) }
 
 type X86 struct{}
 

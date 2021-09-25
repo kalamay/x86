@@ -55,10 +55,17 @@ func Compare(t *testing.T, in *InstSet, expect []Expect) {
 			FailInst(t, in, args, "expected error: %s", expect.Error)
 		default:
 			if !bytes.Equal(expect.Code, buf.Bytes()) {
-				t.Errorf("incorrect code generated:\n    expect = %#v\n    actual = %#v\n", expect.Code, buf.Bytes())
+				t.Errorf("incorrect code generated:\n    %s    expect = %#v\n    actual = %#v\n", AssemblyOf(in, args), expect.Code, buf.Bytes())
 			}
 		}
 	}
+}
+
+func AssemblyOf(in *InstSet, ops []Op) string {
+	buf := strings.Builder{}
+	em := emit.Emit{Emitter: emit.Assembly{}, Writer: &buf}
+	em.Emit(in, ops)
+	return buf.String()
 }
 
 func OperandsOf(types TypeSet) ([][]Op, int) {
@@ -148,8 +155,10 @@ func collectMem(s Size) []Op {
 		MakeMem(RAX).WithSize(s),
 		MakeMem(RBX).WithSize(s).WithIndex(RDX, S32),
 		MakeMem(RCX).WithSize(s).WithIndex(RBP, S64).WithDisplacement(16),
+		MakeMem(RSP).WithSize(s).WithDisplacement(16),
 		MakeMem(R11).WithSize(s),
 		MakeMem(R12).WithSize(s).WithIndex(R14, S32),
 		MakeMem(R13).WithSize(s).WithIndex(R15, S64).WithDisplacement(24),
+		MakeMem(R14).WithSize(s).WithDisplacement(24),
 	}
 }

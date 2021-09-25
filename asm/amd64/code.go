@@ -228,7 +228,7 @@ func (a *Addr) SetIndirect(mem Mem) {
 	}
 
 	// TODO: check for rmIndirect and rmDisp32
-	if mem.scale == S0 {
+	if mem.scale == S0 && mem.base.Index() != rmIndirect {
 		(*Code)(a).Set(0, byte(m.WithIndirectReg(d, mem.base)))
 	} else {
 		(*Code)(a).Set(0, byte(m.WithIndirectMem(d)))
@@ -320,7 +320,11 @@ func (m ModRM) DispSize() Size {
 type SIB triple
 
 func SIBOf(m Mem) SIB {
-	return SIB(triple(0).set1(m.base.Index()).set2(m.index.Index()).set3(uint8(m.scale) - 1))
+	sib := triple(0).set1(m.base.Index()).set2(0b100)
+	if m.index.Validate() == nil {
+		sib = sib.set2(m.index.Index()).set3(uint8(m.scale) - 1)
+	}
+	return SIB(sib)
 }
 
 type triple byte

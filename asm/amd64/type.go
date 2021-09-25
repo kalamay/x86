@@ -223,7 +223,7 @@ const (
 
 func T(t ...Type) (ts TypeSet) {
 	for i, t := range t {
-		ts |= TypeSet(t << i * typeBits)
+		ts |= TypeSet(t << (i * typeBits))
 	}
 	return
 }

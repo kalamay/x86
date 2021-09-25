@@ -1,6 +1,9 @@
 package jit
 
-import "unsafe"
+import (
+	"math/bits"
+	"unsafe"
+)
 
 type sliceHeader struct {
 	data unsafe.Pointer
@@ -50,7 +53,7 @@ func p2(n, min int) int {
 
 func allocSize(n, min, max int) (int, int) {
 	switch {
-	case n < min:
+	case n <= min:
 		return min, 0
 	case n > max:
 		return (n + (pageSize - 1)) / pageSize * pageSize, -1
@@ -61,5 +64,16 @@ func allocSize(n, min, max int) (int, int) {
 			bucket++
 		}
 		return size, bucket
+	}
+}
+
+func bucketOf(n, min, max int) int {
+	switch {
+	case n <= min:
+		return 0
+	case n > max:
+		return -1
+	default:
+		return bits.TrailingZeros32(uint32(n >> bits.TrailingZeros32(uint32(min))))
 	}
 }

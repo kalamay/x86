@@ -10,15 +10,15 @@ import (
 	"unsafe"
 )
 
-type Alloc string
+type Alloc []byte
 
-func (c Alloc) Addr() unsafe.Pointer {
-	return (*stringHeader)(unsafe.Pointer(&c)).data
+func (a Alloc) Addr() unsafe.Pointer {
+	return (*sliceHeader)(unsafe.Pointer(&a)).data
 }
 
-func (c Alloc) String() string {
+func (a Alloc) String() string {
 	p, buf, tail := 0, strings.Builder{}, [16]byte{}
-	for i := 0; i < len(c); i++ {
+	for i := 0; i < len(a); i++ {
 		p = i & 15
 		if p == 0 {
 			if i > 0 {
@@ -31,9 +31,9 @@ func (c Alloc) String() string {
 		if (i & 1) == 0 {
 			buf.WriteByte(' ')
 		}
-		fmt.Fprintf(&buf, "%02x", c[i])
-		if ' ' <= c[i] && c[i] <= '~' {
-			tail[p] = c[i]
+		fmt.Fprintf(&buf, "%02x", a[i])
+		if ' ' <= a[i] && a[i] <= '~' {
+			tail[p] = a[i]
 		} else {
 			tail[p] = '.'
 		}
@@ -250,21 +250,28 @@ func (p *Pool) alloc(s int) (dst []byte, err error) {
 func (p *Pool) Alloc(src []byte) (Alloc, error) {
 	b, err := p.alloc(len(src))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	pg := pageOf(b)
-	mwrite(pg)
-	memset16(b[len(src) & ^127:], 0xc3)
-	copy(b, src)
-	mexec(pg)
+	if p.protect {
+		pg := pageOf(b)
+		mwrite(pg)
+		if p.fillMem {
+			memset16(b[len(src) & ^127:], p.fillVal)
+		}
+		copy(b, src)
+		mexec(pg)
+	} else {
+		copy(b, src)
+	}
 
 	return codeOf(b, len(src)), nil
 }
 
 func (p *Pool) Free(c *Alloc) {
-	b, bucket := blockOf(*c, p.minSize, p.maxSize)
-	*c = ""
+	b := blockOf(*c)
+	bucket := bucketOf(len(b), p.minSize, p.maxSize)
+	*c = nil
 
 	if bucket < 0 {
 		atomic.AddUint64(&p.stats.Overage.Frees, 1)
@@ -329,9 +336,10 @@ func mexec(b []byte) {
 
 func codeOf(b []byte, n int) Alloc {
 	hdr := *(*sliceHeader)(unsafe.Pointer(&b))
-	return Alloc(*(*string)(unsafe.Pointer(&stringHeader{
+	return Alloc(*(*[]byte)(unsafe.Pointer(&sliceHeader{
 		data: hdr.data,
 		len:  n,
+		cap:  hdr.cap,
 	})))
 }
 
@@ -345,12 +353,11 @@ func pageOf(b []byte) []byte {
 	}))
 }
 
-func blockOf(c Alloc, min, max int) ([]byte, int) {
-	size, bucket := allocSize(len(c), min, max)
-	hdr := *(*stringHeader)(unsafe.Pointer(&c))
+func blockOf(c Alloc) []byte {
+	hdr := *(*sliceHeader)(unsafe.Pointer(&c))
 	return *(*[]byte)(unsafe.Pointer(&sliceHeader{
 		data: hdr.data,
-		len:  size,
-		cap:  size,
-	})), bucket
+		len:  hdr.cap,
+		cap:  hdr.cap,
+	}))
 }

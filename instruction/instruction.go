@@ -39,6 +39,7 @@ func (is *Set) Load(r io.Reader) (err error) {
 		sort.SliceStable(inst.Forms, func(i, j int) bool {
 			return inst.Forms[i].score() < inst.Forms[j].score()
 		})
+		inst.Summary = strings.TrimSpace(inst.Summary)
 	}
 
 	*is = v

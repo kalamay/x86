@@ -63,6 +63,7 @@ func (pl *PrefixList) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error
 	return nil
 }
 
+// REX prefixes are instruction-prefix bytes used in 64-bit mode.
 type REX struct {
 	// FW describes the REX.W bit. Possible values are "0", "1", and "". An empty
 	// value indicates that the bit is ignored.
@@ -90,6 +91,31 @@ type REX struct {
 	FB OptRefBits `xml:"B,attr"`
 }
 
+// Encode conditionally appends the REX prefix to f.
+//
+// A prefix is necessary only if an instruction references one of the extended
+// registers or uses a 64-bit operand. If a REX prefix is used when it has no
+// meaning, it is ignored. If used, the REX prefix byte must immediately precede
+// the opcode byte or the escape opcode byte.
+//
+//       7     4   3 2 1 0
+//     ╭─────────┬─────────╮
+//     │ 0 1 0 0 ╎ W R X B │
+//     ╰─────────┴─────────╯
+//
+// W:
+//     REX.W can be used to determine the operand size but does not solely
+//     determine operand width. Like the 66H size prefix, 64-bit operand size
+//     override has no effect on byte-specific operations.
+// R:
+//     REX.R modifies the ModR/M reg field when that field encodes a GPR, SSE,
+//     control or debug register. REX.R is ignored when ModR/M specifies other
+//     registers or defines an extended opcode.
+// X:
+//     REX.X bit modifies the SIB index field.
+// B:
+//     REX.B either modifies the base in the ModR/M r/m field or SIB base field;
+//     or it modifies the opcode reg field used for accessing GPRs.
 func (r *REX) Encode(f *Format, args []operand.Arg) bool {
 	rex, enc := byte(rexDefault), false
 
@@ -155,6 +181,11 @@ func (r *REX) score() int {
 	return 1
 }
 
+// VEX prefixes are used to encode instructions for 128- and 256-bit instructions.
+//
+// The VEX prefix is required to be the last prefix and immediately precedes the
+// opcode bytes. It must follow any other prefixes. If VEX prefix is present a
+// REX prefix is not supported.
 type VEX struct {
 	// Type is the type of the leading byte for VEX encoding.
 	Type VexType `xml:"type,attr"`
@@ -212,6 +243,65 @@ type VEX struct {
 	Fpp OptBits `xml:"pp,attr"`
 }
 
+// Encode conditionally appends the VEX prefix to f.
+//
+// The VEX prefix is encoded in either the two-byte form (the first byte must
+// be C5H) or in the three-byte form (the first byte must be C4H). The two-byte
+// VEX is used mainly for 128-bit, scalar, and the most common 256-bit AVX
+// instructions; while the three-byte VEX provides a compact replacement of REX
+// and 3-byte opcode instructions (including AVX and FMA instructions). Beyond
+// the first byte of the VEX prefix, it consists of a number of bit fields
+// providing specific capability
+//
+// Three-byte format:
+//
+//      7                0  7 6 5  4        0  7  6    3  2  1  0
+//     ╭──────────────────┬──────────────────┬───────────────────╮
+//     │     11000100     │ R X B ╎  m-mmmm  │ W ╎ vvvv ╎ L ╎ pp │
+//     ╰──────────────────┴──────────────────┴───────────────────╯
+//
+// Two-byte format:
+//
+//      7                0  7  6    3  2  1  0
+//     ╭──────────────────┬───────────────────╮
+//     │     11000101     │ R ╎ vvvv ╎ L ╎ pp │
+//     ╰──────────────────┴───────────────────╯
+//
+// R:
+//     REX.R in 1’s complement (inverted) form
+//         1: Same as REX.R=0 (must be 1 in 32-bit mode)
+//         0: Same as REX.R=1 (64-bit mode only)
+// X:
+//     REX.X in 1’s complement (inverted) form
+//         1: Same as REX.X=0 (must be 1 in 32-bit mode)
+//         0: Same as REX.X=1 (64-bit mode only)
+// B:
+//     REX.B in 1’s complement (inverted) form
+//         1: Same as REX.B=0 (Ignored in 32-bit mode).
+//         0: Same as REX.B=1 (64-bit mode only)
+// W:
+//     Opcode specific (use like REX.W, or used for opcode extension, or ignored,
+//     depending on the opcode byte).
+// m-mmmm:
+//     Provides compaction to allow many legacy instruction to be encoded
+//     without the constant byte sequence.
+//         00000: Reserved for future use (will #UD)
+//         00001: implied 0F leading opcode byte
+//         00010: implied 0F 38 leading opcode bytes
+//         00011: implied 0F 3A leading opcode bytes
+//         00100-11111: Reserved for future use (will #UD)
+// vvvv:
+//     A register specifier (in 1’s complement form) or 1111 if unused.
+// L:
+//     Vector Length.
+//         0: scalar or 128-bit vector
+//         1: 256-bit vector
+// pp:
+//     Opcode extension providing equivalent functionality of a SIMD prefix.
+//         00: None
+//         01: 66
+//         10: F3
+//         11: F2
 func (v *VEX) Encode(f *Format, args []operand.Arg) bool {
 	var vex uint32
 
@@ -307,19 +397,56 @@ func (v *VEX) score() int {
 	return 3
 }
 
+// EVEX prefixes encode the majority of the AVX-512 family of instructions
+// operating on 512/256/128-bit vector register operands.
 type EVEX struct {
+	// FRR describes the EVEX.R'R bits. Possible values are None, or a reference
+	// to an register-type instruction operand. None indicates that the field is
+	// ignored. The R' bit specifies bit 4 of the register number and the R bit
+	// specifies bit 3 of the register number.
+	FRR OptRefBits `xml:"RR,attr"`
+	// FX describes the EVEX.X bit. Possible values are None, or a reference to
+	// one of the instruction operands. The value None indicates that this bit is
+	// ignored. If X is a reference to an instruction operand, the operand is of
+	// memory type and the EVEX.X bit specifies the high bit (bit 3) of the index
+	// register number, and the B instance variable refers to the same operand.
+	FX OptRefBits `xml:"X,attr"`
+	// FB describes the EVEX.B bit. Possible values are None, or a reference to
+	// one of the instruction operands. None indicates that this bit is ignored.
+	// If R is a reference to an instruction operand, the operand can be of
+	// register or memory type. If the operand is of register type, the EVEX.R
+	// bit specifies the high bit (bit 3) of the register number, and the EVEX.X
+	// bit is ignored. If the operand is of memory type, the EVEX.R bit specifies
+	// the high bit (bit 3) of the base register number, and the X instance
+	// variable refers to the same operand.
+	FB OptRefBits `xml:"B,attr"`
 	// Fmm describes the EVEX mm (compressed legacy escape) field. Identical to
 	// two low bits of VEX.m-mmmm field. Possible values are:
 	//     0b01: Implies 0x0F leading opcode byte.
 	//     0b10: Implies 0x0F 0x38 leading opcode bytes.
 	//     0b11: Implies 0x0F 0x3A leading opcode bytes.
 	Fmm OptBits `xml:"mm,attr"`
+	// FW describes the EVEX.W bit. Possible values are 0, 1, and None. None
+	// indicates that the bit is ignored.
+	FW OptBits `xml:"W,attr"`
+	// Fvvvv describes the EVEX vvvv field. Possible values are 0b0000 or a
+	// reference to one of the instruction operands. The value 0b0000 indicates
+	// that this field is not used. If vvvv is a reference to an instruction
+	// operand, the operand is of register type and EVEX.vvvv field specifies
+	// the register number.
+	Fvvvv OptRefBits `xml:"vvvv,attr"`
 	// Fpp describes the EVEX pp (compressed legacy prefix) field. Possible values are:
 	//     0b00: No implied prefix.
 	//     0b01: Implied 0x66 prefix.
 	//     0b10: Implied 0xF3 prefix.
 	//     0b11: Implied 0xF2 prefix.
 	Fpp OptBits `xml:"pp,attr"`
+	// Fz describes the EVEX z bit. Possible values are None, 0 or a reference
+	// to one of the instruction operands. None indicates that the bit is ignored.
+	// The value 0 indicates that the bit is not used. If z is a reference to an
+	// instruction operand, the operand supports zero-masking with register mask,
+	// and EVEX.z indicates whether zero-masking is used.
+	Fz OptRefBits `xml:"z,attr"`
 	// FLL describes the EVEX.L'L bits. Specify either vector length for the operation,
 	// or explicit rounding control (in which case operation is 512 bits wide).
 	// Possible values:
@@ -333,39 +460,6 @@ type EVEX struct {
 	//         EVEX.L'L is set to 0b10 (embedded rounding control is only supported
 	//         for 512-bit wide operations).
 	FLL OptRefBits `xml:"LL,attr"`
-	// FW describes the EVEX.W bit. Possible values are 0, 1, and None. None
-	// indicates that the bit is ignored.
-	FW OptBits `xml:"W,attr"`
-	// Fvvvv describes the EVEX vvvv field. Possible values are 0b0000 or a
-	// reference to one of the instruction operands. The value 0b0000 indicates
-	// that this field is not used. If vvvv is a reference to an instruction
-	// operand, the operand is of register type and EVEX.vvvv field specifies
-	// the register number.
-	Fvvvv OptRefBits `xml:"vvvv,attr"`
-	// FV describes the EVEX V field. Possible values are 0, or a reference to
-	// one of the instruction operands. The value 0 indicates that this field is
-	// not used (EVEX.vvvv is not used or encodes a general-purpose register).
-	FV OptRefBits `xml:"V,attr"`
-	// FRR describes the EVEX.R'R bits. Possible values are None, or a reference
-	// to an register-type instruction operand. None indicates that the field is
-	// ignored. The R' bit specifies bit 4 of the register number and the R bit
-	// specifies bit 3 of the register number.
-	FRR OptRefBits `xml:"RR,attr"`
-	// FB describes the EVEX.B bit. Possible values are None, or a reference to
-	// one of the instruction operands. None indicates that this bit is ignored.
-	// If R is a reference to an instruction operand, the operand can be of
-	// register or memory type. If the operand is of register type, the EVEX.R
-	// bit specifies the high bit (bit 3) of the register number, and the EVEX.X
-	// bit is ignored. If the operand is of memory type, the EVEX.R bit specifies
-	// the high bit (bit 3) of the base register number, and the X instance
-	// variable refers to the same operand.
-	FB OptRefBits `xml:"B,attr"`
-	// FX describes the EVEX.X bit. Possible values are None, or a reference to
-	// one of the instruction operands. The value None indicates that this bit is
-	// ignored. If X is a reference to an instruction operand, the operand is of
-	// memory type and the EVEX.X bit specifies the high bit (bit 3) of the index
-	// register number, and the B instance variable refers to the same operand.
-	FX OptRefBits `xml:"X,attr"`
 	// Fb describes the EVEX b (broadcast/rounding control/suppress all exceptions
 	// context) bit. Possible values are 0 or a reference to one of the instruction
 	// operands. The value 0 indicates that this field is not used. If b is a
@@ -377,23 +471,61 @@ type EVEX struct {
 	// rounding control is used. If b is a reference to a suppress-all-exceptions
 	// specification, EVEX.b encodes whether suppress-all-exceptions is enabled.
 	Fb OptRefBits `xml:"b,attr"`
+	// FV describes the EVEX V field. Possible values are 0, or a reference to
+	// one of the instruction operands. The value 0 indicates that this field is
+	// not used (EVEX.vvvv is not used or encodes a general-purpose register).
+	FV OptRefBits `xml:"V,attr"`
 	// Faaa describes the EVEX aaa (embedded opmask register specifier) field. Possible
 	// values are 0 or a reference to one of the instruction operands. The value 0
 	// indicates that this field is not used. If aaa is a reference to an instruction
 	// operand, the operand supports register mask, and EVEX.aaa encodes the mask register.
 	Faaa OptRefBits `xml:"aaa,attr"`
-	// Fz describes the EVEX z bit. Possible values are None, 0 or a reference
-	// to one of the instruction operands. None indicates that the bit is ignored.
-	// The value 0 indicates that the bit is not used. If z is a reference to an
-	// instruction operand, the operand supports zero-masking with register mask,
-	// and EVEX.z indicates whether zero-masking is used.
-	Fz OptRefBits `xml:"z,attr"`
 	// Disp8xN describes the N value used for encoding compressed 8-bit displacement.
 	// Possible values are powers of 2 in [1, 64] range or None. None indicates that
 	// this instruction form does not use displacement (the form has no memory operands).
 	Disp8xN uint8 `xml:"disp8xN,attr"`
 }
 
+// Encode conditionally appends the EVEX prefix to f.
+//
+//      7                0  7 6 5 4 3 3  1  0  7  6    3  2  1  0  7 6 5 4 3  2   0
+//     ╭──────────────────┬──────────────────┬───────────────────┬──────────────────╮
+//     │     01100010     │ R X B Ŕ 0 0 ╎ mm │ W ╎ vvvv ╎ 1 ╎ pp │ z Ĺ L b Ṽ ╎ aaa  │
+//     ╰──────────────────┴──────────────────┴───────────────────┴──────────────────╯
+// R:
+//     REX.R in 1’s complement (inverted) form
+//         1: Same as REX.R=0 (must be 1 in 32-bit mode)
+//         0: Same as REX.R=1 (64-bit mode only)
+// X:
+//     REX.X in 1’s complement (inverted) form
+//         1: Same as REX.X=0 (must be 1 in 32-bit mode)
+//         0: Same as REX.X=1 (64-bit mode only)
+// B:
+//     REX.B in 1’s complement (inverted) form
+//         1: Same as REX.B=0 (Ignored in 32-bit mode).
+//         0: Same as REX.B=1 (64-bit mode only)
+// Ŕ:
+//     High-16 register specifier modifier. Combine with EVEX.R and ModR/M.reg.
+//     This bit is stored in inverted format.
+// mm:
+//     Compressed legacy escape. Identical to low two bits of VEX.mmmmm.
+// W:
+//     Osize promotion/Opcode extension.
+// vvvv:
+//     VVVV register specifier. Same as VEX.vvvv. This field is encoded in bit
+//     inverted format.
+// pp:
+//     Compressed legacy prefix. Identical to VEX.pp.
+// z:
+//     Zeroing/Merging.
+// Ĺ L:
+//     Vector length/RC.
+// b:
+//     Broadcast/RC/SAE Context.
+// Ṽ:
+//     High-16 VVVV/VIDX register specifier.
+// aaa:
+//     Embedded opmask register specifier.
 func (e *EVEX) Encode(f *Format, args []operand.Arg) bool {
 	if !e.Fmm.IsSet() {
 		return false

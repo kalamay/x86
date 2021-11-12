@@ -120,6 +120,7 @@ func (ol *OpcodeList) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error
 	return nil
 }
 
+// ModRM defines the addressing-form specifier byte.
 type ModRM struct {
 	// Mode describes the addressing mode. Possible values are 0b11 or a reference
 	// to an instruction operand. If mode value is 0b11, the Mod R/M encodes two
@@ -152,6 +153,47 @@ const (
 	SIBNoIndex               = 0b00100000
 )
 
+// Encode appends the ModR/M byte, and possible SIB byte, to f.
+//
+// Many instructions that refer to an operand in memory have an addressing-form
+// specifier byte (called the ModR/M byte) following the primary opcode. The
+// ModR/M byte contains three fields of information:
+//
+//      7    6 5       3 2       0
+//     ╭──────────────────────────╮
+//     │ MOD  ╎   REG   ╎   R/M   │
+//     ╰──────────────────────────╯
+//
+// MOD:
+//     The mod field combines with the r/m field to form 32 possible values:
+//     eight registers and 24 addressing modes.
+// REG:
+//     The reg/opcode field specifies either a register number or three more
+//     bits of opcode information. The purpose of the reg/opcode field is
+//     specified in the primary opcode.
+// R/M:
+//     The r/m field can specify a register as an operand or it can be
+//     combined with the mod field to encode an addressing mode. Sometimes,
+//     certain combinations of the mod field and the r/m field are used to
+//     express opcode information for some instructions.
+//
+// SIB defintes the secondary addressing-form specifier byte.
+//
+// Certain encodings of the ModR/M byte require a second addressing byte
+// (the SIB byte). The base-plus-index and scale-plus-index forms of 32-bit
+// addressing require the SIB byte. The SIB byte includes the following fields:
+//
+//      7    6 5       3 2       0
+//     ╭──────────────────────────╮
+//     │SCALE ╎  INDEX  ╎  BASE   │
+//     ╰──────────────────────────╯
+//
+// SCALE:
+//     The scale field specifies the scale factor.
+// INDEX:
+//     The index field specifies the register number of the index register.
+// BASE:
+//     The base field specifies the register number of the base register.
 func (m *ModRM) Encode(f *Format, args []operand.Arg) {
 	v, mode := m.RM.Value()
 	if mode != OptModeRef {

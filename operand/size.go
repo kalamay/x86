@@ -28,6 +28,10 @@ const (
 	sizeMask = 0b111
 )
 
+func (s Size) String() string {
+	return fmt.Sprintf("#size=%d", s.Bits())
+}
+
 func (s Size) ImmBits() int {
 	if s == Size4 {
 		return 4

@@ -65,11 +65,10 @@ func (pr *Print) Parse(p *Parser) error {
 		return err
 	}
 
-	mem := operand.Mem{Base: pr.ptr, Size: operand.Size32}
+	mem := operand.SizedPtr(pr.ptr, operand.Size32)
 	pr.emit.MOV(mem, operand.Int((int(pf)<<16)|int(reg)))
 
-	mem.Size = reg.Size()
-	mem.Disp = 4
+	mem = mem.Sized(reg.Size()).Offset(4)
 
 	switch reg.Type() {
 	case operand.RegTypeGeneral:
@@ -77,7 +76,7 @@ func (pr *Print) Parse(p *Parser) error {
 	case operand.RegTypeVector:
 		pr.emit.VMOVDQU(mem, reg)
 	}
-	pr.emit.LEA(pr.ptr, operand.Mem{Base: pr.ptr, Disp: int32(4 + reg.Size().Bytes())})
+	pr.emit.LEA(pr.ptr, mem.Offset(int32(reg.Size().Bytes())))
 
 	return nil
 }

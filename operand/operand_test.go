@@ -1,12 +1,10 @@
 package operand
 
 import (
-	"fmt"
 	"testing"
 )
 
 func TestOperandNames(t *testing.T) {
-	fmt.Printf("mask: %032b\n", pKeyMask&kindMask)
 	for name, param := range paramTypes {
 		str := param.String()
 		if name != str {
@@ -14,3 +12,18 @@ func TestOperandNames(t *testing.T) {
 		}
 	}
 }
+
+/*
+func TestParamValues(t *testing.T) {
+	tests := struct {
+		Kind         Kind
+		Implicit     bool
+		Input        bool
+		Output       bool
+		Const        bool
+		Masked       bool
+		MergeMasked  bool
+		ExtendedSize Size
+	}{}
+}
+*/

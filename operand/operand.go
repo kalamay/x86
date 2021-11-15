@@ -7,6 +7,30 @@ import (
 	"sync"
 )
 
+//                    3               2               1               0
+//      7             0 7 6 5 4 3 2 1 0 7             0               0
+//     ╭───────────────┬───────────────┬───────────────────────────────╮
+//     │ ╎ ╎ ╎ ╎C╎I╎W╎R│Z╎K╎ESIZE╎KIND │          KIND BITS            │
+//     ╰───────────────┴───────────────┴───────────────────────────────╯
+//
+// KIND BITS hold the 16-bits of kind-specific values.
+//
+// KIND is a three-bit kind value
+//
+// ESIZE is the extension size, if any.
+//
+// K is the masked flag.
+//
+// Z is the merged flag. This is generally used with K.
+//
+// R is the input (read) flag.
+//
+// W is the output (write) flag.
+//
+// I is the implicit flag. Implicit params define operands that are used
+// without being passed to the instruction. (i.e. eax, ebx, etc. for CPUID)
+//
+// C is the const flag.
 type Param uint32
 
 type Arg interface {
@@ -17,16 +41,17 @@ type Arg interface {
 }
 
 const (
-	pImplicit = 1 << (iota + pExtSizeShift + sizeBits)
+	pMasked = 1 << (iota + pExtSizeShift + sizeBits)
+	pMerged
 	pInput
 	pOutput
+	pImplicit
 	pConst
-	pMasked
-	pMerged
 
 	pMergeMasked  = pMerged | pMasked
 	pExtSizeShift = kindShift + kindBits
-	pMask         = 0b1111111111111111 << 16
+	pShift        = 16
+	pMask         = 0b1111111111111111 << pShift
 	pKeyMask      = ^Param(pImplicit | pInput | pOutput | (sizeMask << pExtSizeShift))
 )
 

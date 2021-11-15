@@ -36,6 +36,7 @@ const (
 	MemTypeVector32
 	MemTypeVector64
 
+	mIDMask      = 0b111
 	mElemShift   = sizeBits
 	mElemMask    = 0b111 << mElemShift
 	mTargetShift = mElemShift + sizeBits
@@ -43,6 +44,33 @@ const (
 	mTypeBits    = 3
 	mTypeMask    = 0b111 << mTypeShift
 )
+
+func Ptr(base Reg) Mem {
+	return Mem{Base: base}
+}
+
+func SizedPtr(base Reg, size Size) Mem {
+	return Mem{Base: base, Size: size}
+}
+
+// Offset returns a copy of m plus idx bytes.
+func (m Mem) Offset(idx int32) Mem {
+	m.Disp += idx
+	return m
+}
+
+// Idx returns a copy of m using r as an index and scale as a multiplier.
+func (m Mem) Idx(r Reg, scale Size) Mem {
+	m.Index = r
+	m.Scale = scale
+	return m
+}
+
+// Sized returns a copy of m with a specific size.
+func (m Mem) Sized(size Size) Mem {
+	m.Size = size
+	return m
+}
 
 func (m Mem) Kind() Kind { return KindMem }
 
@@ -88,7 +116,7 @@ func (m Mem) Validate() error {
 		if m.Scale < Size8 || Size64 < m.Scale {
 			return ErrInvalidScale
 		}
-		if m.Scale == Size8 && (m.Index.ID()&0b111) == 0b100 {
+		if m.Scale == Size8 && (m.Index.ID()&mIDMask) == mIDMask {
 			return ErrUnsupportedIndex
 		}
 	}

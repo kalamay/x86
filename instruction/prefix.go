@@ -132,7 +132,7 @@ func (r *REX) Encode(f *Format, args []operand.Arg) bool {
 			rex, enc = rex|(1<<2), true
 		}
 	case OptModeRef:
-		if r, ok := args[v].(operand.Reg); ok && r.Extended8() {
+		if r, ok := args[v].(operand.Reg); ok && r.Next8() {
 			rex, enc = rex|(1<<2), true
 		}
 	}
@@ -143,7 +143,7 @@ func (r *REX) Encode(f *Format, args []operand.Arg) bool {
 			rex, enc = rex|(1<<1), true
 		}
 	case OptModeRef:
-		if m, ok := args[v].(operand.Mem); ok && m.Index.Extended8() {
+		if m, ok := args[v].(operand.Mem); ok && m.Index.Next8() {
 			rex, enc = rex|(1<<1), true
 		}
 	}
@@ -156,11 +156,11 @@ func (r *REX) Encode(f *Format, args []operand.Arg) bool {
 	case OptModeRef:
 		switch arg := args[v].(type) {
 		case operand.Mem:
-			if arg.Base.Extended8() {
+			if arg.Base.Next8() {
 				rex, enc = rex|1, true
 			}
 		case operand.Reg:
-			if arg.Extended8() {
+			if arg.Next8() {
 				rex, enc = rex|1, true
 			}
 		}
@@ -319,7 +319,7 @@ func (v *VEX) Encode(f *Format, args []operand.Arg) bool {
 	case OptModeValue:
 		vex = (vex & ^uint32(1<<15)) | (uint32(^b&1) << 15)
 	case OptModeRef:
-		if reg, ok := args[b].(operand.Reg); ok && reg.Extended8() {
+		if reg, ok := args[b].(operand.Reg); ok && reg.Next8() {
 			vex &= ^uint32(1 << 15)
 		}
 	}
@@ -328,7 +328,7 @@ func (v *VEX) Encode(f *Format, args []operand.Arg) bool {
 	case OptModeValue:
 		vex = (vex & ^uint32(1<<14)) | (uint32(^b&1) << 14)
 	case OptModeRef:
-		if mem, ok := args[b].(operand.Mem); ok && mem.Index.Extended8() {
+		if mem, ok := args[b].(operand.Mem); ok && mem.Index.Next8() {
 			vex &= ^uint32(1 << 14)
 		}
 	}
@@ -339,11 +339,11 @@ func (v *VEX) Encode(f *Format, args []operand.Arg) bool {
 	case OptModeRef:
 		switch arg := args[b].(type) {
 		case operand.Mem:
-			if arg.Base.Extended8() {
+			if arg.Base.Next8() {
 				vex &= ^uint32(1 << 13)
 			}
 		case operand.Reg:
-			if arg.Extended8() {
+			if arg.Next8() {
 				vex &= ^uint32(1 << 13)
 			}
 		}

@@ -2,6 +2,7 @@ package operand
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 )
@@ -9,8 +10,8 @@ import (
 var ErrRegSizeInvalid = errors.New("reg size invalid")
 
 type (
-	Reg      uint16
-	RegParam = Reg
+	Reg      uint32
+	RegParam uint16
 	RegType  uint8
 )
 
@@ -22,13 +23,41 @@ const (
 	RegTypeStatus
 	RegTypeSegment
 
-	rTypeShift = sizeBits
-	rTypeMask  = 0b111 << rTypeShift
-	rIPID      = 0b101
-	rMatchMask = rTypeMask | sizeMask
-	rIDShift   = 8
-	regInv     = "%!"
+	rTypeShift   = sizeBits
+	rTypeMask    = 0b111 << rTypeShift
+	rIPID        = 0b101
+	rMatchMask   = rTypeMask | sizeMask
+	rIDShift     = 8
+	regInv       = "%!"
+	rNx8Mask     = (8 << rIDShift) | (0b110 << rTypeShift)
+	rNx8Cmp      = (8 << rIDShift) // (8 <= ID <= 15 || 24 <= ID <= 31) && (Type == (General|Vector))
+	rNx16Mask    = (16 << rIDShift) | rTypeMask
+	rNx16Cmp     = (16 << rIDShift) | RegTypeVector // 16 <= ID <= 31 && Type == Vector
+	rHiMask      = (0b11111100 << rIDShift) | rTypeMask | sizeMask
+	rHiCmp       = (20 << rIDShift) | Size8 // 20 <= ID <= 23 && Type == General && Size == 8
+	rMasked      = pMasked
+	rMergeMasked = pMergeMasked
+	rMaskShift   = pShift
+	rMaskMask    = 0b111 << rMaskShift
 )
+
+func (rt RegType) String() string {
+	switch rt {
+	case RegTypeGeneral:
+		return "#type=general"
+	case RegTypeVector:
+		return "#type=vector"
+	case RegTypeMask:
+		return "#type=mask"
+	case RegTypeIP:
+		return "#type=ip"
+	case RegTypeStatus:
+		return "#type=status"
+	case RegTypeSegment:
+		return "#type=segment"
+	}
+	return fmt.Sprintf("#type=%d", rt)
+}
 
 func MakeReg(id uint8, typ RegType, size Size) Reg {
 	return (Reg(id) << rIDShift) | Reg(typ&rTypeMask) | Reg(size&sizeMask)
@@ -229,11 +258,44 @@ const (
 	RFLAGS = Reg(RegTypeStatus | Size64)
 )
 
-func (r Reg) Kind() Kind    { return KindReg }
-func (r Reg) Size() Size    { return Size(r & sizeMask) }
-func (r Reg) Type() RegType { return RegType(r & rTypeMask) }
-func (r Reg) ID() uint8     { return uint8(r >> rIDShift) }
-func (r Reg) MMX() bool     { return r&(rTypeMask|sizeMask) == RegTypeVector|Size64 }
+func (r Reg) Unmask() Reg {
+	return r & ^Reg(rMergeMasked|rMaskMask)
+}
+
+func (r Reg) Mask(z Reg) Reg {
+	switch {
+	case r.Type() != RegTypeVector:
+		panic("vector register required")
+	case z.Type() != RegTypeMask:
+		panic("mask register required")
+	}
+	return r.Unmask() | rMasked | ((Reg(z.ID()) << rMaskShift) & rMaskMask)
+}
+
+func (r Reg) MergeMask(k Reg) Reg {
+	switch {
+	case r.Type() != RegTypeVector:
+		panic("vector register required")
+	case k.Type() != RegTypeMask:
+		panic("mask register required")
+	}
+	return r.Unmask() | rMergeMasked | ((Reg(k.ID()) << rMaskShift) & rMaskMask)
+}
+
+func (r Reg) Kind() Kind        { return KindReg }
+func (r Reg) Size() Size        { return Size(r & sizeMask) }
+func (r Reg) Type() RegType     { return RegType(r & rTypeMask) }
+func (r Reg) ID() uint8         { return uint8(r >> rIDShift) }
+func (r Reg) MMX() bool         { return r&(rTypeMask|sizeMask) == RegTypeVector|Size64 }
+func (r Reg) Masked() bool      { return (r & rMasked) == rMasked }
+func (r Reg) MergeMasked() bool { return (r & rMergeMasked) == rMergeMasked }
+
+func (r Reg) MaskReg() Reg {
+	if r&rMasked == 0 {
+		return 0
+	}
+	return MakeReg(uint8((r&rMaskMask)>>rMaskShift), RegTypeMask, Size64)
+}
 
 func (r Reg) Prefix() (byte, bool) {
 	switch r.Type() {
@@ -261,7 +323,7 @@ func (r Reg) String() string {
 	case RegTypeMask:
 		return maskNames[r.ID()]
 	case RegTypeIP:
-		return ipNames[r.Size()-3]
+		return ipNames[r.Size()-2]
 	case RegTypeStatus:
 		return statusNames[r.Size()-2]
 	case RegTypeSegment:
@@ -270,27 +332,19 @@ func (r Reg) String() string {
 	return regInv
 }
 
-func (r Reg) Extended() bool {
-	// ((r.ID() >= 8 && r.ID() <= 15) || (r.ID() >= 24 && r.ID() <= 31))
-	// && (r.Type() == RegTypeGeneral || r.Type() == RegTypeVector)
-	// TODO: EVEX will need a different range
-	return (r & 0b00001000_01110000) == 0b00001000_00000000
-}
-
-func (r Reg) HighByte() bool {
-	// r.ID() >= 20 && r.ID() <= 23 && r.Type() == RegTypeGeneral && r.Size() == Size8
-	return (r & 0b01111110_011111111) == 0b00010100_00000001
-}
+func (r Reg) HighByte() bool { return (r & rHiMask) == rHiCmp }
+func (r Reg) Next8() bool    { return (r & rNx8Mask) == rNx8Cmp }
+func (r Reg) Next16() bool   { return (r & rNx16Mask) == rNx16Cmp }
 
 func (r Reg) Matches(p Param) bool {
 	if p.Kind() != KindReg {
 		return false
 	}
 	if p.Const() {
-		return r == RegParam(p)
+		return RegParam(r) == RegParam(p)
 	}
 	// r.Type() == RegParam(p).Type() && r.Size() == RegParam(p).Size()
-	return ((r ^ RegParam(p)) & rMatchMask) == 0
+	return ((RegParam(r) ^ RegParam(p)) & rMatchMask) == 0
 }
 
 var regNames = map[string]Reg{}

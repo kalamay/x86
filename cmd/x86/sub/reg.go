@@ -25,16 +25,19 @@ func (cli *RegCmd) Run(data *instruction.Set) error {
 	}
 
 	buf := bufio.NewWriter(os.Stdout)
-	buf.WriteString("NAME   ID  SIZE EX HI TYPE\n")
+	buf.WriteString("NAME   ID  SIZE HI 8  16 TYPE\n")
 	for _, reg := range regs {
-		ex, hi := "✗", "✗"
-		if reg.Extended() {
-			ex = "✓"
-		}
+		hi, ex8, ex16 := "✗", "✗", "✗"
 		if reg.HighByte() {
 			hi = "✓"
 		}
-		fmt.Fprintf(buf, "%-6s %-3d %-4d %-2s %-2s ", reg, reg.ID(), reg.Size().Bits(), ex, hi)
+		if reg.Next8() {
+			ex8 = "✓"
+		}
+		if reg.Next16() {
+			ex16 = "✓"
+		}
+		fmt.Fprintf(buf, "%-6s %-3d %-4d %-2s %-2s %-2s ", reg, reg.ID(), reg.Size().Bits(), hi, ex8, ex16)
 		switch reg.Type() {
 		case operand.RegTypeGeneral:
 			buf.WriteString("general\n")

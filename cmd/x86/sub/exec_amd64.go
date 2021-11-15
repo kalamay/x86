@@ -67,6 +67,9 @@ func (cli *ExecCmd) Run(data *instruction.Set) error {
 		return err
 	}
 
+	emit.VZEROALL()
+	emit.RET()
+
 	for _, err := range emit.Close() {
 		return err
 	}

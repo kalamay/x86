@@ -174,9 +174,6 @@ func (p *Parser) Eval(data *instruction.Set, e *x64.Emit) error {
 		}
 	}
 
-	e.VZEROALL()
-	e.RET()
-
 	for i := len(p.dirs) - 1; i >= 0; i-- {
 		if err := p.dirs[i].After(p); err != nil {
 			return err

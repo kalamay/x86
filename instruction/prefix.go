@@ -98,24 +98,24 @@ type REX struct {
 // meaning, it is ignored. If used, the REX prefix byte must immediately precede
 // the opcode byte or the escape opcode byte.
 //
-//       7     4   3 2 1 0
-//     ╭─────────┬─────────╮
-//     │ 0 1 0 0 ╎ W R X B │
-//     ╰─────────┴─────────╯
+//                    0
+//      7     4 3 2 1 0
+//     ╭───────────────╮
+//     │ 0100  ╎W╎R╎X╎B│
+//     ╰───────────────╯
 //
-// W:
-//     REX.W can be used to determine the operand size but does not solely
-//     determine operand width. Like the 66H size prefix, 64-bit operand size
-//     override has no effect on byte-specific operations.
-// R:
-//     REX.R modifies the ModR/M reg field when that field encodes a GPR, SSE,
-//     control or debug register. REX.R is ignored when ModR/M specifies other
-//     registers or defines an extended opcode.
-// X:
-//     REX.X bit modifies the SIB index field.
-// B:
-//     REX.B either modifies the base in the ModR/M r/m field or SIB base field;
-//     or it modifies the opcode reg field used for accessing GPRs.
+// REX.W can be used to determine the operand size but does not solely determine
+// operand width. Like the 66H size prefix, 64-bit operand size override has no
+// effect on byte-specific operations.
+//
+// REX.R modifies the ModR/M reg field when that field encodes a GPR, SSE, control
+// or debug register. REX.R is ignored when ModR/M specifies other registers or
+// defines an extended opcode.
+//
+// REX.X bit modifies the SIB index field.
+//
+// REX.B either modifies the base in the ModR/M r/m field or SIB base field; or
+// it modifies the opcode reg field used for accessing GPRs.
 func (r *REX) Encode(f *Format, args []operand.Arg) bool {
 	rex, enc := byte(rexDefault), false
 
@@ -132,7 +132,7 @@ func (r *REX) Encode(f *Format, args []operand.Arg) bool {
 			rex, enc = rex|(1<<2), true
 		}
 	case OptModeRef:
-		if r, ok := args[v].(operand.Reg); ok && r.Extended() {
+		if r, ok := args[v].(operand.Reg); ok && r.Extended8() {
 			rex, enc = rex|(1<<2), true
 		}
 	}
@@ -143,7 +143,7 @@ func (r *REX) Encode(f *Format, args []operand.Arg) bool {
 			rex, enc = rex|(1<<1), true
 		}
 	case OptModeRef:
-		if m, ok := args[v].(operand.Mem); ok && m.Index.Extended() {
+		if m, ok := args[v].(operand.Mem); ok && m.Index.Extended8() {
 			rex, enc = rex|(1<<1), true
 		}
 	}
@@ -156,11 +156,11 @@ func (r *REX) Encode(f *Format, args []operand.Arg) bool {
 	case OptModeRef:
 		switch arg := args[v].(type) {
 		case operand.Mem:
-			if arg.Base.Extended() {
+			if arg.Base.Extended8() {
 				rex, enc = rex|1, true
 			}
 		case operand.Reg:
-			if arg.Extended() {
+			if arg.Extended8() {
 				rex, enc = rex|1, true
 			}
 		}
@@ -255,53 +255,54 @@ type VEX struct {
 //
 // Three-byte format:
 //
-//      7                0  7 6 5  4        0  7  6    3  2  1  0
-//     ╭──────────────────┬──────────────────┬───────────────────╮
-//     │     11000100     │ R X B ╎  m-mmmm  │ W ╎ vvvv ╎ L ╎ pp │
-//     ╰──────────────────┴──────────────────┴───────────────────╯
+//                    2               1               0
+//      7             0 7 6 5 4       0 7 6     3 2 1 0
+//     ╭───────────────┬───────────────┬───────────────╮
+//     │   11000100    │R╎X╎B╎ m-mmmm  │W╎ vvvv  ╎L╎pp │
+//     ╰───────────────┴───────────────┴───────────────╯
 //
 // Two-byte format:
 //
-//      7                0  7  6    3  2  1  0
-//     ╭──────────────────┬───────────────────╮
-//     │     11000101     │ R ╎ vvvv ╎ L ╎ pp │
-//     ╰──────────────────┴───────────────────╯
+//                    1               0
+//      7             0 7 6 5 4 3 2 1 0
+//     ╭───────────────┬───────────────╮
+//     │   11000101    │R╎ vvvv  ╎L╎pp │
+//     ╰───────────────┴───────────────╯
 //
-// R:
-//     REX.R in 1’s complement (inverted) form
-//         1: Same as REX.R=0 (must be 1 in 32-bit mode)
-//         0: Same as REX.R=1 (64-bit mode only)
-// X:
-//     REX.X in 1’s complement (inverted) form
-//         1: Same as REX.X=0 (must be 1 in 32-bit mode)
-//         0: Same as REX.X=1 (64-bit mode only)
-// B:
-//     REX.B in 1’s complement (inverted) form
-//         1: Same as REX.B=0 (Ignored in 32-bit mode).
-//         0: Same as REX.B=1 (64-bit mode only)
-// W:
-//     Opcode specific (use like REX.W, or used for opcode extension, or ignored,
-//     depending on the opcode byte).
-// m-mmmm:
-//     Provides compaction to allow many legacy instruction to be encoded
-//     without the constant byte sequence.
-//         00000: Reserved for future use (will #UD)
-//         00001: implied 0F leading opcode byte
-//         00010: implied 0F 38 leading opcode bytes
-//         00011: implied 0F 3A leading opcode bytes
-//         00100-11111: Reserved for future use (will #UD)
-// vvvv:
-//     A register specifier (in 1’s complement form) or 1111 if unused.
-// L:
-//     Vector Length.
-//         0: scalar or 128-bit vector
-//         1: 256-bit vector
-// pp:
-//     Opcode extension providing equivalent functionality of a SIMD prefix.
-//         00: None
-//         01: 66
-//         10: F3
-//         11: F2
+// VEX.R is equivalent to REX.R in 1’s complement (inverted) form.
+//     1: Same as REX.R=0 (must be 1 in 32-bit mode)
+//     0: Same as REX.R=1 (64-bit mode only)
+//
+// VEX.X is equivalent to REX.X in 1’s complement (inverted) form.
+//     1: Same as REX.X=0 (must be 1 in 32-bit mode)
+//     0: Same as REX.X=1 (64-bit mode only)
+//
+// VEX.B is equivalent to REX.B in 1’s complement (inverted) form.
+//     1: Same as REX.B=0 (Ignored in 32-bit mode).
+//     0: Same as REX.B=1 (64-bit mode only)
+//
+// VEX.W is opcode specific (use like REX.W, or used for opcode extension, or
+// ignored, depending on the opcode byte).
+//
+// VEX.m-mmmm provides compaction to allow many legacy instruction to be encoded
+// without the constant byte sequence.
+//     00000: Reserved for future use (will #UD)
+//     00001: implied 0F leading opcode byte
+//     00010: implied 0F 38 leading opcode bytes
+//     00011: implied 0F 3A leading opcode bytes
+//     00100-11111: Reserved for future use (will #UD)
+//
+// VEX.vvvv is a register specifier (in 1’s complement form) or 1111 if unused.
+//
+// VEX.L sets the vector length.
+//     0: scalar or 128-bit vector
+//     1: 256-bit vector
+//
+// VEX.pp sets the opcode extension providing equivalent functionality of a SIMD prefix.
+//     00: None
+//     01: 66
+//     10: F3
+//     11: F2
 func (v *VEX) Encode(f *Format, args []operand.Arg) bool {
 	var vex uint32
 
@@ -318,7 +319,7 @@ func (v *VEX) Encode(f *Format, args []operand.Arg) bool {
 	case OptModeValue:
 		vex = (vex & ^uint32(1<<15)) | (uint32(^b&1) << 15)
 	case OptModeRef:
-		if reg, ok := args[b].(operand.Reg); ok && reg.Extended() {
+		if reg, ok := args[b].(operand.Reg); ok && reg.Extended8() {
 			vex &= ^uint32(1 << 15)
 		}
 	}
@@ -327,7 +328,7 @@ func (v *VEX) Encode(f *Format, args []operand.Arg) bool {
 	case OptModeValue:
 		vex = (vex & ^uint32(1<<14)) | (uint32(^b&1) << 14)
 	case OptModeRef:
-		if mem, ok := args[b].(operand.Mem); ok && mem.Index.Extended() {
+		if mem, ok := args[b].(operand.Mem); ok && mem.Index.Extended8() {
 			vex &= ^uint32(1 << 14)
 		}
 	}
@@ -338,11 +339,11 @@ func (v *VEX) Encode(f *Format, args []operand.Arg) bool {
 	case OptModeRef:
 		switch arg := args[b].(type) {
 		case operand.Mem:
-			if arg.Base.Extended() {
+			if arg.Base.Extended8() {
 				vex &= ^uint32(1 << 13)
 			}
 		case operand.Reg:
-			if arg.Extended() {
+			if arg.Extended8() {
 				vex &= ^uint32(1 << 13)
 			}
 		}
@@ -488,44 +489,45 @@ type EVEX struct {
 
 // Encode conditionally appends the EVEX prefix to f.
 //
-//      7                0  7 6 5 4 3 3  1  0  7  6    3  2  1  0  7 6 5 4 3  2   0
-//     ╭──────────────────┬──────────────────┬───────────────────┬──────────────────╮
-//     │     01100010     │ R X B Ŕ 0 0 ╎ mm │ W ╎ vvvv ╎ 1 ╎ pp │ z Ĺ L b Ṽ ╎ aaa  │
-//     ╰──────────────────┴──────────────────┴───────────────────┴──────────────────╯
-// R:
-//     REX.R in 1’s complement (inverted) form
-//         1: Same as REX.R=0 (must be 1 in 32-bit mode)
-//         0: Same as REX.R=1 (64-bit mode only)
-// X:
-//     REX.X in 1’s complement (inverted) form
-//         1: Same as REX.X=0 (must be 1 in 32-bit mode)
-//         0: Same as REX.X=1 (64-bit mode only)
-// B:
-//     REX.B in 1’s complement (inverted) form
-//         1: Same as REX.B=0 (Ignored in 32-bit mode).
-//         0: Same as REX.B=1 (64-bit mode only)
-// Ŕ:
-//     High-16 register specifier modifier. Combine with EVEX.R and ModR/M.reg.
-//     This bit is stored in inverted format.
-// mm:
-//     Compressed legacy escape. Identical to low two bits of VEX.mmmmm.
-// W:
-//     Osize promotion/Opcode extension.
-// vvvv:
-//     VVVV register specifier. Same as VEX.vvvv. This field is encoded in bit
-//     inverted format.
-// pp:
-//     Compressed legacy prefix. Identical to VEX.pp.
-// z:
-//     Zeroing/Merging.
-// Ĺ L:
-//     Vector length/RC.
-// b:
-//     Broadcast/RC/SAE Context.
-// Ṽ:
-//     High-16 VVVV/VIDX register specifier.
-// aaa:
-//     Embedded opmask register specifier.
+//                    3               2               1               0
+//      7             0 7 6 5 4 3 2 1 0 7 6     3 2 1 0 7 6 5 4 3 2   0
+//     ╭───────────────┬───────────────┬───────────────┬───────────────╮
+//     │   01100010    │R╎X╎B╎Ṛ╎0╎0╎mm │W╎ vvvv  ╎1╎pp │z╎ḶL ╎b╎Ṿ╎ aaa │
+//     ╰───────────────┴───────────────┴───────────────┴───────────────╯
+//
+// EVEX.R is equivalent to REX.R in 1’s complement (inverted) form
+//     1: Same as REX.R=0 (must be 1 in 32-bit mode)
+//     0: Same as REX.R=1 (64-bit mode only)
+//
+// EVEX.X is equivalent to REX.X in 1’s complement (inverted) form
+//     1: Same as REX.X=0 (must be 1 in 32-bit mode)
+//     0: Same as REX.X=1 (64-bit mode only)
+//
+// EVEX.B is equivalent to REX.B in 1’s complement (inverted) form
+//     1: Same as REX.B=0 (Ignored in 32-bit mode).
+//     0: Same as REX.B=1 (64-bit mode only)
+//
+// EVEX.Ṛ is the high-16 register specifier modifier. Combine with EVEX.R and
+// ModR/M.reg. This bit is stored in inverted format.
+//
+// EVEX.mm is the compressed legacy escape. Identical to low two bits of VEX.mmmmm.
+//
+// EVEX.W sets the Osize promotion/Opcode extension.
+//
+// EVEX.vvvv is the register specifier. Same as VEX.vvvv. This field is encoded in bit
+// inverted format.
+//
+// EVEX.pp is the ompressed legacy prefix. Identical to VEX.pp.
+//
+// EVEX.z sets zeroing/merging behavior.
+//
+// EVEX.ḶL sets vector length/RC.
+//
+// EVEX.b sets broadcast/RC/SAE context.
+//
+// EVEX.Ṿ is the high-16 VVVV/VIDX register specifier.
+//
+// EVEX.aaa sets the embedded opmask register specifier.
 func (e *EVEX) Encode(f *Format, args []operand.Arg) bool {
 	if !e.Fmm.IsSet() {
 		return false
